@@ -1,2 +1,2 @@
-CFLAGS+=-ggdb -O2
+CFLAGS+=-ggdb
 main: main.o waiter.o
