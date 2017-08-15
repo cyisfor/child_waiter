@@ -76,9 +76,12 @@ void waiter_drain(int signalfd) {
 			case EINTR:
 				continue;
 			case EAGAIN:
-				break;
+				return;
 			};
+			perror("drain");
+			abort();
 		}
+		printf("%d\n",amt);
 		assert(amt == sizeof(info));
 		assert(info.ssi_signo == SIGCHLD);
 		/* ignore info.ssi_status, because a zombie process still needs to be reaped,
