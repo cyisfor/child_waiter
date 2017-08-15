@@ -51,6 +51,7 @@ int waiter_next(int* status) {
 	int pid = waitpid(-1,status,WNOHANG);
 	if(pid == 0) return 0;
 	if(pid < 0) {
+		// wut? isn't SIGCHLD blocked?
 		if(errno == ECHILD) return 0;
 		perror("waiter_next");
 		abort();
