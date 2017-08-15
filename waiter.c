@@ -101,17 +101,20 @@ int waiter_fork(void) {
 	return pid;
 }
 
-void waiter_expect(int signalfd, time_t sec, int pid, bool check_status) {
+void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
 	if(false == waiter_wait(signalfd, sec)) {
-		perror("timeout");
-		abort();
+		error(23,0,"timeout waiting for %d",expected);
 	}
 	int status;
 	int test = waiter_next(&status);
-	if(test != pid) {
-		perror("wrong pid returned");
-		abort();
+	if(test != expected) {
+		error(23,0,"wrong pid returned expected %d got %d",expected,test);
 	}
 	if(!check_status) return;
 	if(!WIFEXITED(status)) {
 		error(WSTOPSIG(status),errno,"%d died with %d",pid,WSTOPSIG(status));
+	}
+	if(0==WEXITSTATUS(status)) return;
+	error(WEXITSTATUS(status),0,"%d exited with %d",pid,WEXITSTATUS(status));
+}
+
