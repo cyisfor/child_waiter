@@ -7,7 +7,7 @@
 #include <signal.h>
 #include <errno.h>
 
-static long int child_processes = 0;
+static int child_processes = 0;
 
 int waiter_setup(void) {
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
@@ -121,3 +121,6 @@ void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
 	error(WEXITSTATUS(status),0,"%d exited with %d",pid,WEXITSTATUS(status));
 }
 
+int waiter_processes(void) {
+	return child_processes;
+}
