@@ -2,11 +2,14 @@
 #include <signal.h>
 #include <errno.h>
 
+static long int child_processes = 0;
+
 int waiter_setup(void) {
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	sigset_t child;
 	sigemptyset(&child);
 	sigaddset(&child,SIGCHLD);
+	// waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
 	int res = sigprocmask(SIG_BLOCK,&child,NULL);
 	assert(res == 0);
@@ -21,6 +24,31 @@ void waiter_unblock(void) {
 	sigaddset(&child,SIGCHLD);
 	// unblock leaves signals not in child
 	sigprocmask(SIG_UNBLOCK,&child,NULL);
+}
+
+// wait for JUST the signalfd to fire.
+bool waiter_wait(int signalfd, time_t sec) {
+	sigset_t child;
+	sigemptyset(&child);
+	sigaddset(&child,SIGCHLD);
+	struct timespec timeout = {
+		.tv_sec = sec
+	};
+	int res;
+SELECT_AGAIN: 
+	res = pselect(signalfd+1,&read,NULL,NULL,&timeout);
+	if(res < 0) {
+		switch(errno) {
+		case EINTR:
+			goto SELECT_AGAIN;
+		};
+		perror("pselect");
+		abort();
+	}
+	if(res == 0) return false; // timeout
+	assert(res == 1);
+	waiter_drain(signalfd);
+	return true;
 }
 
 // call this to drain a signalfd, and then waiter_next until it returns 0
@@ -44,8 +72,6 @@ void waiter_drain(int signalfd) {
 			 this signal. Same goes for ssi_pid */
 	}
 }
-
-static long int child_processes = 0;
 
 // call until return 0, then select again, then drain
 int waiter_next(int* status) {
