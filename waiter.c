@@ -7,9 +7,11 @@
 
 #include <time.h>
 #include <signal.h>
+#include <error.h>
 #include <errno.h>
 #include <assert.h>
 #include <stdlib.h> // abort
+#include <stdio.h> // perror
 
 static int child_processes = 0;
 
@@ -122,10 +124,10 @@ void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
 	}
 	if(!check_status) return;
 	if(!WIFEXITED(status)) {
-		error(WTERMSIG(status),errno,"%d died with %d",pid,WTERMSIG(status));
+		error(WTERMSIG(status),errno,"%d died with %d",test,WTERMSIG(status));
 	}
 	if(0==WEXITSTATUS(status)) return;
-	error(WEXITSTATUS(status),0,"%d exited with %d",pid,WEXITSTATUS(status));
+	error(WEXITSTATUS(status),0,"%d exited with %d",test,WEXITSTATUS(status));
 }
 
 int waiter_processes(void) {
