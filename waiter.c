@@ -1,4 +1,7 @@
 #include <sys/signalfd.h>
+#include <sys/wait.h>
+
+#include <time.h>
 #include <signal.h>
 #include <errno.h>
 
@@ -97,3 +100,18 @@ int waiter_fork(void) {
 	}
 	return pid;
 }
+
+void waiter_expect(int signalfd, time_t sec, int pid, bool check_status) {
+	if(false == waiter_wait(signalfd, sec)) {
+		perror("timeout");
+		abort();
+	}
+	int status;
+	int test = waiter_next(&status);
+	if(test != pid) {
+		perror("wrong pid returned");
+		abort();
+	}
+	if(!check_status) return;
+	if(!WIFEXITED(status)) {
+		error(WSTOPSIG(status),errno,"%d died with %d",pid,WSTOPSIG(status));
