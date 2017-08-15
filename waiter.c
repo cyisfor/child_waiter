@@ -2,10 +2,12 @@
 
 #include <sys/signalfd.h>
 #include <sys/wait.h>
+#include <sys/select.h> // pselect
 
 #include <time.h>
 #include <signal.h>
 #include <errno.h>
+#include <assert.h>
 
 static int child_processes = 0;
 
@@ -115,7 +117,7 @@ void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
 	}
 	if(!check_status) return;
 	if(!WIFEXITED(status)) {
-		error(WSTOPSIG(status),errno,"%d died with %d",pid,WSTOPSIG(status));
+		error(WTERMSIG(status),errno,"%d died with %d",pid,WTERMSIG(status));
 	}
 	if(0==WEXITSTATUS(status)) return;
 	error(WEXITSTATUS(status),0,"%d exited with %d",pid,WEXITSTATUS(status));
