@@ -1,3 +1,5 @@
+#include "waiter.h"
+
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 
@@ -102,6 +104,7 @@ int waiter_fork(void) {
 }
 
 void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
+	assert(child_processes == 1);
 	if(false == waiter_wait(signalfd, sec)) {
 		error(23,0,"timeout waiting for %d",expected);
 	}
