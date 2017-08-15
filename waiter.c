@@ -43,8 +43,11 @@ bool waiter_wait(int signalfd, time_t sec) {
 		.tv_sec = sec
 	};
 	int res;
+	fd_set rfds;
+	FD_ZERO(&rfds);
+	FD_SET(signalfd,&rfds);
 SELECT_AGAIN: 
-	res = pselect(signalfd+1,&read,NULL,NULL,&timeout);
+	res = pselect(signalfd+1,&rfds,NULL,NULL,&timeout);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
