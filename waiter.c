@@ -3,6 +3,7 @@
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 #include <sys/select.h> // pselect
+#include <unistd.h> // read
 
 #include <time.h>
 #include <signal.h>
@@ -21,7 +22,7 @@ int waiter_setup(void) {
 	int res = sigprocmask(SIG_BLOCK,&child,NULL);
 	assert(res == 0);
 	// but signalfd only unmasks SIGCHLD, not any in oldmask
-	return = signalfd(-1, &child, SFD_NONBLOCK | SFD_CLOEXEC);
+	return signalfd(-1, &child, SFD_NONBLOCK | SFD_CLOEXEC);
 }
 
 // call this in every child process before exec.
