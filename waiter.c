@@ -45,6 +45,8 @@ void waiter_drain(int signalfd) {
 	}
 }
 
+static long int child_processes = 0;
+
 // call until return 0, then select again, then drain
 int waiter_next(int* status) {
 	// SIGCHLD is blocked here, may get multiple children quitting though
@@ -55,6 +57,17 @@ int waiter_next(int* status) {
 		if(errno == ECHILD) return 0;
 		perror("waiter_next");
 		abort();
+	}
+	--child_processes;
+	return pid;
+}
+
+int waiter_fork(void) {
+	int pid = fork();
+	if(pid == 0) {
+		waiter_unblock();
+	} else {
+		++child_processes;
 	}
 	return pid;
 }
