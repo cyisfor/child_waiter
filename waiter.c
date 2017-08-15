@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdlib.h> // abort
 
 static int child_processes = 0;
 
@@ -47,13 +48,13 @@ bool waiter_wait(int signalfd, time_t sec) {
 	FD_ZERO(&rfds);
 	FD_SET(signalfd,&rfds);
 SELECT_AGAIN: 
-	res = pselect(signalfd+1,&rfds,NULL,NULL,&timeout);
+	res = pselect(signalfd+1,&rfds,NULL,NULL,&timeout, &child);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
 			goto SELECT_AGAIN;
 		};
-		perror("pselect");
+		error(0,errno,"pselect");
 		abort();
 	}
 	if(res == 0) return false; // timeout
