@@ -115,15 +115,15 @@ int waiter_fork(void) {
 	return pid;
 }
 
-void waiter_check(int status, bool timeout) {
+void waiter_check(int status, bool timeout, int expected) {
 	if(timeout) {
 		error(23,0,"timeout waiting for %d",expected);
 	}
 	if(!WIFEXITED(status)) {
-		error(WTERMSIG(status),errno,"%d died with %d",test,WTERMSIG(status));
+		error(WTERMSIG(status),errno,"%d died with %d",expected,WTERMSIG(status));
 	}
 	if(0==WEXITSTATUS(status)) return;
-	error(WEXITSTATUS(status),0,"%d exited with %d",test,WEXITSTATUS(status));
+	error(WEXITSTATUS(status),0,"%d exited with %d",expected,WEXITSTATUS(status));
 	return status
 }
 
