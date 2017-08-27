@@ -115,7 +115,7 @@ int waiter_fork(void) {
 	return pid;
 }
 
-void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
+int waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
 	assert(child_processes == 1);
 	if(false == waiter_wait(signalfd, sec)) {
 		error(23,0,"timeout waiting for %d",expected);
@@ -131,6 +131,7 @@ void waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
 	}
 	if(0==WEXITSTATUS(status)) return;
 	error(WEXITSTATUS(status),0,"%d exited with %d",test,WEXITSTATUS(status));
+	return status
 }
 
 int waiter_processes(void) {
