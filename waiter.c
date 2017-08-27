@@ -115,23 +115,28 @@ int waiter_fork(void) {
 	return pid;
 }
 
-int waiter_waitfor(int signalfd, time_t sec, int expected, bool check_status) {
-	assert(child_processes == 1);
-	if(false == waiter_wait(signalfd, sec)) {
+void waiter_check(int status, bool timeout) {
+	if(timeout) {
 		error(23,0,"timeout waiting for %d",expected);
 	}
-	int status;
-	int test = waiter_next(&status);
-	if(test != expected) {
-		error(23,0,"wrong pid returned expected %d got %d",expected,test);
-	}
-	if(!check_status) return;
 	if(!WIFEXITED(status)) {
 		error(WTERMSIG(status),errno,"%d died with %d",test,WTERMSIG(status));
 	}
 	if(0==WEXITSTATUS(status)) return;
 	error(WEXITSTATUS(status),0,"%d exited with %d",test,WEXITSTATUS(status));
 	return status
+}
+
+bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
+	assert(child_processes == 1);
+	if(false == waiter_wait(signalfd, sec)) {
+		return false;
+	}
+	int test = waiter_next(status);
+	if(test != expected) {
+		error(23,0,"wrong pid returned expected %d got %d",expected,test);
+	}
+	return true;
 }
 
 int waiter_processes(void) {
