@@ -124,19 +124,18 @@ void waiter_check(int status, bool timeout, int expected) {
 	}
 	if(0==WEXITSTATUS(status)) return;
 	error(WEXITSTATUS(status),0,"%d exited with %d",expected,WEXITSTATUS(status));
-	return status
 }
 
 bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
 	assert(child_processes == 1);
 	if(false == waiter_wait(signalfd, sec)) {
-		return false;
+		return true;
 	}
 	int test = waiter_next(status);
 	if(test != expected) {
 		error(23,0,"wrong pid returned expected %d got %d",expected,test);
 	}
-	return true;
+	return false;
 }
 
 int waiter_processes(void) {
