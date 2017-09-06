@@ -1,5 +1,8 @@
 #include <time.h>
 #include <stdbool.h>
+#include <signal.h>
+
+extern sigset_t waiter_sigmask;
 
 int waiter_setup(void);
 void waiter_unblock(void);
