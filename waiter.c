@@ -6,7 +6,6 @@
 #include <unistd.h> // read
 
 #include <time.h>
-#include <signal.h>
 #include <error.h>
 #include <errno.h>
 #include <assert.h>
@@ -15,42 +14,38 @@
 
 static int child_processes = 0;
 
+sigset_t waiter_sigmask;
+
 int waiter_setup(void) {
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
-	sigset_t child;
-	sigemptyset(&child);
-	sigaddset(&child,SIGCHLD);
-	// waiter_fork may have been called before but the child died
+	sigemptyset(&waiter_sigmask);
+	sigaddset(&waiter_sigmask,SIGCHLD);
+// waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
-	int res = sigprocmask(SIG_BLOCK,&child,NULL);
+	int res = sigprocmask(SIG_BLOCK,&waiter_sigmask,NULL);
 	assert(res == 0);
 	// but signalfd only unmasks SIGCHLD, not any in oldmask
-	return signalfd(-1, &child, SFD_NONBLOCK | SFD_CLOEXEC);
+	return signalfd(-1, &waiter_sigmask, SFD_NONBLOCK | SFD_CLOEXEC);
 }
 
 // call this in every child process before exec.
 void waiter_unblock(void) {
-	sigset_t child;
-	sigemptyset(&child);
-	sigaddset(&child,SIGCHLD);
 	// unblock leaves signals not in child
-	sigprocmask(SIG_UNBLOCK,&child,NULL);
+	sigprocmask(SIG_UNBLOCK,&waiter_sigmask,NULL);
 }
 
 // wait for JUST the signalfd to fire.
 bool waiter_wait(int signalfd, time_t sec) {
-	sigset_t child;
-	sigemptyset(&child);
-	sigaddset(&child,SIGCHLD);
 	struct timespec timeout = {
 		.tv_sec = sec
 	};
 	int res;
-	fd_set rfds;
-	FD_ZERO(&rfds);
-	FD_SET(signalfd,&rfds);
-SELECT_AGAIN: 
-	res = pselect(signalfd+1,&rfds,NULL,NULL,&timeout, &child);
+	struct pollfd poll = {
+		.fd: signalfd,
+		.events: POLLIN
+	};
+POLL_AGAIN: 
+	res = ppoll(&poll,1,&timeout, &waiter_sigmask);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
