@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // ppoll
 #include "waiter.h"
 
 #include <sys/signalfd.h>
@@ -41,15 +42,15 @@ bool waiter_wait(int signalfd, time_t sec) {
 	};
 	int res;
 	struct pollfd poll = {
-		.fd: signalfd,
-		.events: POLLIN
+		.fd = signalfd,
+		.events = POLLIN
 	};
 POLL_AGAIN: 
 	res = ppoll(&poll,1,&timeout, &waiter_sigmask);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
-			goto SELECT_AGAIN;
+			goto POLL_AGAIN;
 		};
 		error(0,errno,"pselect");
 		abort();
