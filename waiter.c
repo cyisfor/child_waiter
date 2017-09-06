@@ -2,7 +2,7 @@
 
 #include <sys/signalfd.h>
 #include <sys/wait.h>
-#include <sys/select.h> // pselect
+#include <sys/poll.h> // ppoll
 #include <unistd.h> // read
 
 #include <time.h>
