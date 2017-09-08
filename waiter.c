@@ -119,9 +119,14 @@ void waiter_check(int status, bool timeout, int expected) {
 
 bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
 	assert(child_processes == 1);
-	if(false == waiter_wait(signalfd, sec)) {
+	struct pollfd poll = {
+		.fd = signalfd,
+		.events = POLLIN
+	};
+	if(false == waiter_wait(&poll, 1, sec)) {
 		return true;
 	}
+	waiter_drain(signalfd);
 	int test = waiter_next(status);
 	if(test != expected) {
 		error(23,0,"wrong pid returned expected %d got %d",expected,test);
