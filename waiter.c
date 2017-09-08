@@ -53,7 +53,6 @@ POLL_AGAIN:
 	}
 	if(res == 0) return false; // timeout
 	assert(res == 1);
-	waiter_drain(signalfd);
 	return true;
 }
 
