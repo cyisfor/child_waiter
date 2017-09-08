@@ -36,23 +36,19 @@ void waiter_unblock(void) {
 }
 
 // wait for JUST the signalfd to fire.
-bool waiter_wait(int signalfd, time_t sec) {
+bool waiter_wait(struct pollfd* poll, int npoll, time_t sec) {
 	struct timespec timeout = {
 		.tv_sec = sec
 	};
 	int res;
-	struct pollfd poll = {
-		.fd = signalfd,
-		.events = POLLIN
-	};
 POLL_AGAIN: 
-	res = ppoll(&poll,1,&timeout, &waiter_sigmask);
+	res = ppoll(poll,1,&timeout, &waiter_sigmask);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
 			goto POLL_AGAIN;
 		};
-		error(0,errno,"pselect");
+		error(0,errno,"ppoll");
 		abort();
 	}
 	if(res == 0) return false; // timeout
