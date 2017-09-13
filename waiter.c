@@ -26,7 +26,7 @@ static void capture_err(void) {
 	pipe(io);
 	errout = io[1];
 	int pid = fork();
-	if(pid != 0) {
+	if(pid == 0) {
 		dup2(io[0],0);
 		close(io[0]);
 		close(io[1]);
@@ -56,6 +56,7 @@ static void capture_err(void) {
 				}
 			}
 		}
+		exit(0);
 	}
 	close(io[0]);
 	INFO("redirecting error to %d\n",pid);
