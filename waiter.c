@@ -62,7 +62,7 @@ static void capture_err(int ppid) {
 		}
 		exit(0);
 	}
-	INFO("redirecting error for %d to %d",ppid,pid);
+	//INFO("redirecting error for %d to %d",ppid,pid);
 	close(io[0]);
 	dup2(io[1],2);
 	close(io[1]);
