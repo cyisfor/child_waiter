@@ -36,7 +36,7 @@ static void capture_err(void) {
 			ssize_t amt = read(0,buf+wpoint,0x1000-wpoint);
 			if(amt <= 0) break;
 			if(amt + wpoint == 0x1000) {
-				write(2,LITLEN("OVERFLOW>"));
+				write(2,LITLEN("OVERFLOW> "));
 				write(2,buf+rpoint,wpoint-rpoint);
 				write(2,LITLEN("\n"));
 				rpoint = wpoint = 0;
@@ -46,10 +46,13 @@ static void capture_err(void) {
 			while(rpoint < wpoint) {
 				char* nl = memchr(buf+rpoint,'\n',wpoint-rpoint);
 				if(nl == NULL) break;
-				write(2,LITLEN(">"));
-				write(2,buf+rpoint,(nl-buf)+rpoint);
+				write(2,LITLEN("> "));
+				write(2,buf+rpoint,nl-(buf+rpoint));
 				write(2,LITLEN("\n"));
 				rpoint = nl - buf + 1;
+				while(rpoint < wpoint && buf[rpoint] == '\n') {
+					++rpoint;
+				}
 			}
 		}
 	}
