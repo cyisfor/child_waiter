@@ -26,7 +26,7 @@ static void capture_err(void) {
 	pipe(io);
 	errout = io[1];
 	int pid = fork();
-	if(pid == 0) {
+	if(pid != 0) {
 		dup2(io[0],0);
 		close(io[0]);
 		close(io[1]);
@@ -47,10 +47,10 @@ static void capture_err(void) {
 				char* nl = memchr(buf+rpoint,'\n',wpoint-rpoint);
 				if(nl == NULL) break;
 				write(2,LITLEN("> "));
-				size_t nlpoint = nl-(buf+rpoint);
-				write(2,buf+rpoint,nlpoint > 60 ? 60 : nlpoint);
+				size_t nlamt = nl-(buf+rpoint);
+				write(2,buf+rpoint,nlamt > 60 ? 60 : nlamt);
 				write(2,LITLEN("\n"));
-				rpoint = nlpoint + 1;
+				rpoint += nlamt + 1;
 				while(rpoint < wpoint && buf[rpoint] == '\n') {
 					++rpoint;
 				}
