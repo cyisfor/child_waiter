@@ -1,5 +1,6 @@
 #define _GNU_SOURCE // ppoll
 #include "waiter.h"
+#include "note.h"
 
 #include <sys/signalfd.h>
 #include <sys/wait.h>
@@ -14,10 +15,49 @@
 #include <stdio.h> // perror
 
 static int child_processes = 0;
+static int errout = -1;
 
 sigset_t waiter_sigmask;
 
+static void capture_err(void) {
+	int io[2];
+	pipe(io);
+	errout = io[1];
+	int pid = fork();
+	if(pid == 0) {
+		dup2(io[0],0);
+		close(io[0]);
+		close(io[1]);
+		char buf[0x1000];
+		size_t rpoint,wpoint = 0;
+		for(;;) {
+			ssize_t amt = read(0,buf+wpoint,0x1000-wpoint);
+			if(amt <= 0) break;
+			if(amt + wpoint == 0x1000) {
+				write(2,LITLEN("OVERFLOW>"));
+				write(2,buf+rpoint,wpoint-rpoint);
+				write(2,LITLEN("\n"));
+				rpoint = wpoint = 0;
+				continue;
+			}
+			wpoint += amt;
+			while(rpoint < wpoint) {
+				char* nl = memchr(buf+rpoint,wpoint-rpoint);
+				if(nl == NULL) break;
+				write(2,LITLEN(">"));
+				write(2,buf+rpoint,(nl-buf)+rpoint);
+				write(2,LITLEN("\n"));
+				rpoint = nl - buf + 1;
+			}
+		}
+	}
+	close(io[0]);
+	INFO("redirecting error to %d\n",pid);
+}
+
+
 int waiter_setup(void) {
+	capture_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	sigemptyset(&waiter_sigmask);
 	sigaddset(&waiter_sigmask,SIGCHLD);
@@ -41,7 +81,7 @@ bool waiter_wait(struct pollfd* poll, int npoll, time_t sec) {
 		.tv_sec = sec
 	};
 	int res;
-POLL_AGAIN: 
+POLL_AGAIN:
 	res = ppoll(poll,1,&timeout, &waiter_sigmask);
 	if(res < 0) {
 		switch(errno) {
@@ -99,6 +139,10 @@ int waiter_next(int* status) {
 int waiter_fork(void) {
 	int pid = fork();
 	if(pid == 0) {
+		if(errout >= 0) {
+			dup2(errout,2);
+			close(errout);
+		}
 		waiter_unblock();
 	} else {
 		++child_processes;
@@ -137,3 +181,4 @@ bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
 int waiter_processes(void) {
 	return child_processes;
 }
+
