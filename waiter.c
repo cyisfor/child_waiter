@@ -47,9 +47,10 @@ static void capture_err(void) {
 				char* nl = memchr(buf+rpoint,'\n',wpoint-rpoint);
 				if(nl == NULL) break;
 				write(2,LITLEN("> "));
-				write(2,buf+rpoint,nl-(buf+rpoint));
+				size_t nlpoint = nl-(buf+rpoint);
+				write(2,buf+rpoint,nlpoint > 60 ? 60 : nlpoint);
 				write(2,LITLEN("\n"));
-				rpoint = nl - buf + 1;
+				rpoint = nlpoint + 1;
 				while(rpoint < wpoint && buf[rpoint] == '\n') {
 					++rpoint;
 				}
