@@ -149,12 +149,16 @@ int waiter_next(int* status) {
 }
 
 int waiter_fork(void) {
+	static int level = 0;
+	assert(level == 0);
+	++level;
 	int pid = fork();
 	if(pid == 0) {
 		capture_err(getpid());
 		waiter_unblock();
 	} else {
 		++child_processes;
+		--level;
 	}
 	return pid;
 }
