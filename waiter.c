@@ -1,6 +1,7 @@
 #define _GNU_SOURCE // ppoll
 #include "waiter.h"
 #include "note.h"
+#include "mystring.h"
 
 #include <sys/signalfd.h>
 #include <sys/wait.h>
@@ -13,6 +14,7 @@
 #include <assert.h>
 #include <stdlib.h> // abort
 #include <stdio.h> // perror
+#include <string.h>
 
 static int child_processes = 0;
 static int errout = -1;
@@ -42,7 +44,7 @@ static void capture_err(void) {
 			}
 			wpoint += amt;
 			while(rpoint < wpoint) {
-				char* nl = memchr(buf+rpoint,wpoint-rpoint);
+				char* nl = memchr(buf+rpoint,'\n',wpoint-rpoint);
 				if(nl == NULL) break;
 				write(2,LITLEN(">"));
 				write(2,buf+rpoint,(nl-buf)+rpoint);
