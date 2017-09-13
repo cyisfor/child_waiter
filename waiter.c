@@ -17,14 +17,14 @@
 #include <string.h>
 
 static int child_processes = 0;
-static int errout = -1;
 
 sigset_t waiter_sigmask;
 
-static void capture_err(void) {
+static void capture_err(int ppid) {
+	char sppid[0x10];
+	int sppidlen = snprintf(sppid,0x10,"%d",ppid);
 	int io[2];
 	pipe(io);
-	errout = io[1];
 	int pid = fork();
 	if(pid == 0) {
 		dup2(io[0],0);
@@ -32,13 +32,18 @@ static void capture_err(void) {
 		close(io[1]);
 		char buf[0x1000];
 		size_t rpoint,wpoint = 0;
+		void writeit(size_t amt) {
+			write(2,sppid,sppidlen);
+			write(2,LITLEN("> "));
+			write(2,buf+rpoint,amt);
+			write(2,LITLEN("\n"));
+		}
 		for(;;) {
 			ssize_t amt = read(0,buf+wpoint,0x1000-wpoint);
 			if(amt <= 0) break;
 			if(amt + wpoint == 0x1000) {
-				write(2,LITLEN("OVERFLOW> "));
-				write(2,buf+rpoint,wpoint-rpoint);
-				write(2,LITLEN("\n"));
+				write(2,LITLEN("OVERFLOW "));
+				writeit(wpoint-rpoint);
 				rpoint = wpoint = 0;
 				continue;
 			}
@@ -46,10 +51,8 @@ static void capture_err(void) {
 			while(rpoint < wpoint) {
 				char* nl = memchr(buf+rpoint,'\n',wpoint-rpoint);
 				if(nl == NULL) break;
-				write(2,LITLEN("> "));
 				size_t nlamt = nl-(buf+rpoint);
-				write(2,buf+rpoint,nlamt > 60 ? 60 : nlamt);
-				write(2,LITLEN("\n"));
+				writeit(nlamt > 60 ? 60 : nlamt);
 				rpoint += nlamt + 1;
 				while(rpoint < wpoint && buf[rpoint] == '\n') {
 					++rpoint;
@@ -59,12 +62,13 @@ static void capture_err(void) {
 		exit(0);
 	}
 	close(io[0]);
-	INFO("redirecting error to %d\n",pid);
+	dup2(io[1],2);
+	close(io[1]);
+	INFO("redirecting error for %d to %d\n",ppid,pid);
 }
 
 
 int waiter_setup(void) {
-	capture_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	sigemptyset(&waiter_sigmask);
 	sigaddset(&waiter_sigmask,SIGCHLD);
@@ -146,10 +150,7 @@ int waiter_next(int* status) {
 int waiter_fork(void) {
 	int pid = fork();
 	if(pid == 0) {
-		if(errout >= 0) {
-			dup2(errout,2);
-			close(errout);
-		}
+		capture_err();
 		waiter_unblock();
 	} else {
 		++child_processes;
