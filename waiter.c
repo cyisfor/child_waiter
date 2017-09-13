@@ -25,6 +25,7 @@ static void capture_err(int ppid) {
 	int sppidlen = snprintf(sppid,0x10,"%d",ppid);
 	int io[2];
 	pipe(io);
+	// no need to unblock as we aren't further forking or execcing
 	int pid = fork();
 	if(pid == 0) {
 		dup2(io[0],0);
@@ -150,7 +151,7 @@ int waiter_next(int* status) {
 int waiter_fork(void) {
 	int pid = fork();
 	if(pid == 0) {
-		capture_err();
+		capture_err(getpid());
 		waiter_unblock();
 	} else {
 		++child_processes;
