@@ -73,6 +73,7 @@ static void capturing_err(void) {
 				struct strrecvfd srcerr;
 				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
 				if(res < 0) {
+					error(0,0,"ummm %d\n",sources[0].fd);
 					ensure_eq(errno,EAGAIN);
 					break;
 				}
@@ -157,11 +158,13 @@ static void capturing_err(void) {
 static
 void send_fd(int where, int pid, int fd) {
 	ensure_eq(sizeof(pid), write(where,&pid,sizeof(pid)));
+	ensure_ne(where,fd);
 	ensure0(ioctl(where, I_SENDFD, fd));
 }
 
 static
 void capture_err(void) {
+	ensure_ge(errcapture,0);
 	int io[2];
 	pipe(io);
 	send_fd(errcapture, getpid(), io[0]);
