@@ -64,14 +64,20 @@ static void capturing_err(void) {
 		if(sources[0].revents & POLLIN) {
 			int srcpid;
 			for(;;) {
-				ssize_t amt = read(sources[0].fd, &srcpid, sizeof(srcpid));
-				if(amt == 0) {
-					assert(errno == EAGAIN);
+				if(srcpid == -1) {
+					ssize_t amt = read(sources[0].fd, &srcpid, sizeof(srcpid));
+					if(amt == 0) {
+						assert(errno == EAGAIN);
+						break;
+					}
+					assert(amt == sizeof(srcpid));
+				}
+				int srcerr;
+				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
+				if(res < 0) {
+					ensure_eq(errno,EAGAIN);
 					break;
 				}
-				assert(amt == sizeof(srcpid));
-				int srcerr;
-				ensure_le(0,ioctl(sources[0].fd, I_RECVFD, &srcerr));
 				INFO("got new error source %d from %d",srcpid,srcerr);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
@@ -83,6 +89,7 @@ static void capturing_err(void) {
 				infos[nsources-2].buf = malloc(0x100);
 				infos[nsources-2].roff = 0;
 				infos[nsources-2].woff = 0;
+				srcpid = -1;
 			}
 			continue;
 		} 
