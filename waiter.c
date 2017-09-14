@@ -78,7 +78,7 @@ static void capturing_err(void) {
 				msg.msg_controllen = sizeof(c_buffer);
 
 				int res = recvmsg(0, &msg, 0);
-				if(res < 0) {
+				if(res <= 0) {
 					ensure_eq(errno,EAGAIN);
 					break;
 				}
@@ -89,7 +89,7 @@ static void capturing_err(void) {
 				// memcpy to avoid alignment issues, I guess?
 				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
 
-				INFO("got new error source %d from %d",srcpid,srcerr);
+				INFO("got new error source %d from %d",srcerr,srcpid);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
