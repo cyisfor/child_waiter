@@ -24,6 +24,8 @@ sigset_t waiter_sigmask;
 
 int errcapture = -1;
 
+#define BUFSIZE 2048
+
 static void capturing_err(void) {
 	int fdpipe[2];
 	pipe2(fdpipe,O_NONBLOCK);
@@ -38,7 +40,7 @@ static void capturing_err(void) {
 	struct {
 		struct {
 			char s[5];
-			int len;
+			int l;
 		} pid;
 		char* buf;
 		int roff;
@@ -63,7 +65,7 @@ static void capturing_err(void) {
 					assert(errno == EAGAIN);
 					break;
 				}
-				assert(amt == sizef(srcpid));
+				assert(amt == sizeof(srcpid));
 				int srcerr;
 				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
 				assert(res > 0);
@@ -83,11 +85,11 @@ static void capturing_err(void) {
 		} 
 		int i;
 		void writeit(size_t amt) {
-				write(2,infos[i-1].pid.s,infos[i-1].pid.l);
-				write(2,LITLEN("> "));
-				write(2,buf+rpoint,amt);
-				write(2,LITLEN("\n"));
-			}
+			write(2,infos[i-1].pid.s,infos[i-1].pid.l);
+			write(2,LITLEN("> "));
+			write(2,infos[i-1].buf+infos[i-1].roff,amt);
+			write(2,LITLEN("\n"));
+		}
 
 		for(i=1;i<nsources;++i) {
 			if(!(sources[i].revents & POLLIN)) continue;
