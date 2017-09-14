@@ -1,6 +1,6 @@
 CFLAGS+=-ggdb
 LDFLAGS += -lssh
-O=$(foreach name,$(N),$(info "-include d/$(name)") $(name).o)
+O=$(foreach name,$(N),$(eval -include d/$(name)) $(name).o)
 LINK=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 N=main waiter sshutil note
 
@@ -10,3 +10,6 @@ main: $(O)
 
 N=test_sshutil sshutil  note
 test_sshutil: $(O)
+
+d/%: %.c | d
+	$(CC) $(CFLAGS) -MG -o $@ $<
