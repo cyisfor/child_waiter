@@ -20,49 +20,138 @@ static int child_processes = 0;
 
 sigset_t waiter_sigmask;
 
-static void capture_err(int ppid) {
-	char sppid[0x10];
-	int sppidlen = snprintf(sppid,0x10,"%d",ppid);
-	int io[2];
-	pipe(io);
-	// no need to unblock as we aren't further forking or execcing
+int errcapture = -1;
+
+static void capturing_err(void) {
+	int fdpipe[2];
+	pipe2(fdpipe,O_NONBLOCK);
 	int pid = fork();
-	if(pid == 0) {
-		dup2(io[0],0);
-		close(io[0]);
-		close(io[1]);
-		char buf[0x1000];
-		size_t rpoint,wpoint = 0;
-		void writeit(size_t amt) {
-			write(2,sppid,sppidlen);
-			write(2,LITLEN("> "));
-			write(2,buf+rpoint,amt);
-			write(2,LITLEN("\n"));
+	if(pid != 0) {
+		close(fdpipe[0]);
+		errcapture = fdpipe[1];
+		return;
+	}
+
+	struct pollfd *sources = malloc(sizeof(struct pollfd));
+	struct {
+		struct {
+			char s[5];
+			int len;
+		} pid;
+		char* buf;
+		int roff;
+		int woff;
+	} *infos = NULL;
+	sources[0].fd = fdpipe[0];
+	sources[0].events = POLLIN; // POLLPRI?
+	int nsources = 1;
+	
+	close(fdpipe[1]);
+	
+	for(;;) {
+		int n = ppoll(sources,nsources,NULL,&waiter_sigmask);
+		if(n == 0) {
+			error(errno,errno,"capture ppoll");
 		}
-		for(;;) {
-			ssize_t amt = read(0,buf+wpoint,0x1000-wpoint);
-			if(amt <= 0) break;
-			if(amt + wpoint == 0x1000) {
-				write(2,LITLEN("OVERFLOW "));
-				writeit(wpoint-rpoint);
-				rpoint = wpoint = 0;
-				continue;
+		if(sources[0].revents & POLLIN) {
+			int srcpid;
+			void writeit(size_t amt) {
+				write(2,sppid,sppidlen);
+				write(2,LITLEN("> "));
+				write(2,buf+rpoint,amt);
+				write(2,LITLEN("\n"));
 			}
-			wpoint += amt;
-			while(rpoint < wpoint) {
-				char* nl = memchr(buf+rpoint,'\n',wpoint-rpoint);
-				if(nl == NULL) break;
-				size_t nlamt = nl-(buf+rpoint);
-				writeit(nlamt > 60 ? 60 : nlamt);
-				rpoint += nlamt + 1;
-				while(rpoint < wpoint && buf[rpoint] == '\n') {
-					++rpoint;
+			for(;;) {
+				ssize_t amt = read(sources[0].fd, &srcpid, sizeof(srcpid));
+				if(amt == 0) {
+					assert(errno == EAGAIN);
+					break;
+				}
+				assert(amt == sizef(srcpid));
+				int srcerr;
+				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
+				assert(res > 0);
+				INFO("got new error source %d from %d",srcpid,srcerr);
+				++nsources;
+				sources = realloc(sources,sizeof(*sources) * nsources);
+				infos = realloc(infos,sizeof(*infos) * (nsources-1));
+				sources[nsources-1].fd = srcerr;
+				sources[nsources-1].events = POLLIN;
+				infos[nsources-2].pid.l = snprintf
+					(infos[nsources-2].pid.s,5,"%d",srcpid);
+				infos[nsources-2].buf = malloc(0x100);
+				infos[nsources-2].roff = 0;
+				infos[nsources-2].woff = 0;
+			}
+			continue;
+		} 
+		int i;
+		for(i=1;i<nsources;++i) {
+			if(!(sources[i].revents & POLLIN)) continue;
+			void writeit(size_t amt) {
+				write(2,infos[i-1].pid.s,infos[i-1].pid.l);
+				write(2,LITLEN("> "));
+				write(2,infos[i-1].buf+infos[i-1].roff,amt);
+				write(2,LITLEN("\n"));
+			}
+			for(;;) {
+				ssize_t amt = read(sources[i].fd,
+													 infos[i-1].buf + infos[i-1].woff,
+													 BUFSIZE - infos[i-1].woff);
+				if(amt == 0) break;
+				if(amt < 0) {
+					assert(errno == EAGAIN || errno == EINTR);
+					break;
+				}
+				if(amt + infos[i-1].woff == BUFSIZE) {
+					write(2,LITLEN("OVERFLOW "));
+					writeit(BUFSIZE - infos[i-1].roff);
+					infos[i-1].roff = infos[i-1].woff = 0;
+				}
+					 
+				infos[i-1].woff += amt;
+				while(infos[i-1].roff < infos[i-1].woff) {
+					char* nl = memchr(infos[i-1].buf+infos[i-1].roff,
+														'\n',
+														infos[i-1].woff - infos[i-1].roff);
+							
+					if(nl == NULL) break;
+					size_t nlamt = nl-(infos[i-1].buf + infos[i-1].roff);
+					writeit(nlamt > 60 ? 60 : nlamt);
+					infos[i-1].roff += nlamt + 1;
+					while(infos[i-1].roff < infos[i-1].woff &&
+								infos[i-1].buf[infos[i-1].roff] == '\n') {
+						++infos[i-1].roff;
+					}
+				}
+				if(infos[i-1].woff == infos[i-1].roff) {
+					infos[i-1].woff = infos[i-1].roff = 0;
+				} else if(infos[i-1].woff - infos[i-1].roff < infos[i-1].roff) {
+					// can shift without overlap
+					memcpy(infos[i-1].buf,
+								 infos[i-1].buf+infos[i-1].roff,
+								 infos[i-1].woff-infos[i-1].roff);
+					infos[i-1].woff -= infos[i-1].roff;
+					infos[i-1].roff = 0;
 				}
 			}
 		}
-		exit(0);
 	}
-	//INFO("redirecting error for %d to %d",ppid,pid);
+
+	abort();
+}
+
+static
+void send_fd(int where, int pid, int fd) {
+	ensure_eq(sizeof(pid), write(where,&pid,sizeof(pid)));
+	ensure0(ioctl(where, I_SENDFD, fd));
+}
+
+static
+void capture_err(void) {
+	int io[2];
+	pipe(io);
+	send_fd(errcapture, getpid(), io[0]);
 	close(io[0]);
 	dup2(io[1],2);
 	close(io[1]);
@@ -154,7 +243,7 @@ int waiter_fork(void) {
 	++level;
 	int pid = fork();
 	if(pid == 0) {
-		capture_err(getpid());
+		capture_err();
 		waiter_unblock();
 	} else {
 		++child_processes;
