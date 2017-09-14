@@ -2,6 +2,7 @@
 #include "waiter.h"
 #include "note.h"
 #include "mystring.h"
+#include "ensure.h"
 
 #include <sys/signalfd.h>
 #include <sys/wait.h>
@@ -53,7 +54,7 @@ static void capturing_err(void) {
 	close(fdpipe[1]);
 	
 	for(;;) {
-		int n = ppoll(sources,nsources,NULL,&waiter_sigmask);
+		int n = ppoll(sources,nsources,NULL,NULL);
 		if(n == 0) {
 			error(errno,errno,"capture ppoll");
 		}
@@ -164,6 +165,7 @@ void capture_err(void) {
 
 
 int waiter_setup(void) {
+	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	sigemptyset(&waiter_sigmask);
 	sigaddset(&waiter_sigmask,SIGCHLD);
@@ -218,7 +220,7 @@ void waiter_drain(int signalfd) {
 			perror("drain");
 			abort();
 		}
-		printf("%d\n",amt);
+
 		assert(amt == sizeof(info));
 		assert(info.ssi_signo == SIGCHLD);
 		/* ignore info.ssi_status, because a zombie process still needs to be reaped,
