@@ -103,7 +103,11 @@ static void capturing_err(void) {
 				srcpid = -1;
 			}
 			continue;
-		} 
+		} else if(sources[0].revents & (POLLHUP|POLLERR)) {
+			INFO("stderr filter done.");
+			exit(0);
+		}
+
 		int i;
 		void writeit(size_t amt) {
 			write(2,infos[i-1].pid.s,infos[i-1].pid.l);
