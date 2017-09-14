@@ -56,7 +56,6 @@ static void capturing_err(void) {
 	sources[0].events = POLLIN; // POLLPRI?
 	int nsources = 1;
 	
-
 	for(;;) {
 		int n = ppoll(sources,nsources,NULL,NULL);
 		if(n == 0) {
@@ -72,8 +71,7 @@ static void capturing_err(void) {
 				}
 				assert(amt == sizeof(srcpid));
 				int srcerr;
-				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
-				assert(res > 0);
+				ensure_le(0,ioctl(sources[0].fd, I_RECVFD, &srcerr));
 				INFO("got new error source %d from %d",srcpid,srcerr);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
