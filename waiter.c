@@ -15,6 +15,8 @@
 #include <stdlib.h> // abort
 #include <stdio.h> // perror
 #include <string.h>
+#include <fcntl.h> // O_*
+#include <stropts.h> // ioctl, IO_*
 
 static int child_processes = 0;
 
