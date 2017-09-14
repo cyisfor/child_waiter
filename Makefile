@@ -1,6 +1,10 @@
 CFLAGS+=-ggdb
 LDFLAGS += -lssh
 all: main test_sshutil
-main: main.o waiter.o  sshutil.o note.o
+O=$(foreach $(N),name,$(eval "-include d/$(name)")$(n).o)
 
-test_sshutil: test_sshutil.o sshutil.o  note.o
+N=main waiter sshutil note
+main: $(O)
+
+N=test_sshutil sshutil  note
+test_sshutil: $(O)
