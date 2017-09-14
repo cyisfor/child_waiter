@@ -73,7 +73,6 @@ static void capturing_err(void) {
 				struct strrecvfd srcerr;
 				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
 				if(res < 0) {
-					error(0,0,"ummm %d\n",sources[0].fd);
 					ensure_eq(errno,EAGAIN);
 					break;
 				}
