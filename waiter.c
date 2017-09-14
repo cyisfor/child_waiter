@@ -105,7 +105,7 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents & (POLLHUP|POLLERR)) {
 			INFO("stderr filter done.");
-			exit(0);
+			//exit(0);
 		}
 
 		int i;
