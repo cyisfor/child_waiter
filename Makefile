@@ -1,9 +1,10 @@
 CFLAGS+=-ggdb
 LDFLAGS += -lssh
-all: main test_sshutil
-O=$(foreach name,$(N),$(message "-include d/$(name)") $(n).o)
+O=$(foreach name,$(N),$(info "-include d/$(name)") $(name).o)
 LINK=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 N=main waiter sshutil note
+
+all: main test_sshutil
 main: $(O)
 	$(LINK)
 
