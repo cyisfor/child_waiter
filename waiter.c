@@ -57,12 +57,6 @@ static void capturing_err(void) {
 		}
 		if(sources[0].revents & POLLIN) {
 			int srcpid;
-			void writeit(size_t amt) {
-				write(2,sppid,sppidlen);
-				write(2,LITLEN("> "));
-				write(2,buf+rpoint,amt);
-				write(2,LITLEN("\n"));
-			}
 			for(;;) {
 				ssize_t amt = read(sources[0].fd, &srcpid, sizeof(srcpid));
 				if(amt == 0) {
@@ -88,6 +82,13 @@ static void capturing_err(void) {
 			continue;
 		} 
 		int i;
+		void writeit(size_t amt) {
+				write(2,infos[i-1].pid.s,infos[i-1].pid.l);
+				write(2,LITLEN("> "));
+				write(2,buf+rpoint,amt);
+				write(2,LITLEN("\n"));
+			}
+
 		for(i=1;i<nsources;++i) {
 			if(!(sources[i].revents & POLLIN)) continue;
 			void writeit(size_t amt) {
