@@ -17,7 +17,7 @@
 #include <stdio.h> // perror
 #include <string.h>
 #include <fcntl.h> // O_*
-#include <stropts.h> // ioctl, IO_*
+#include <sys/socket.h>
 
 static int child_processes = 0;
 
@@ -32,7 +32,7 @@ static void capturing_err(void) {
 		 so we need to use the more complicated socket based method
 	*/
 	int socks[2];
-	ensure0(socketpair(AF_UNIX,SOCK_SEQPACKET,socks))
+	ensure0(socketpair(AF_UNIX,SOCK_SEQPACKET,0,socks))
 	int pid = fork();
 	if(pid != 0) {
 		close(socks[0]);
@@ -77,7 +77,7 @@ static void capturing_err(void) {
 				msg.msg_control = c_buffer;
 				msg.msg_controllen = sizeof(c_buffer);
 
-				int res = recvmsg(socket, &msg, 0);
+				int res = recvmsg(0, &msg, 0);
 				if(res < 0) {
 					ensure_eq(errno,EAGAIN);
 					break;
@@ -88,7 +88,6 @@ static void capturing_err(void) {
 
 				// memcpy to avoid alignment issues, I guess?
 				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
-				struct strrecvfd srcerr;
 
 				INFO("got new error source %d from %d",srcpid,srcerr);
 				++nsources;
@@ -191,7 +190,7 @@ void send_fd(int where, int pid, int fd) {
 
 	msg.msg_controllen = cmsg->cmsg_len;
 
-	ensure_ge (sendmsg(socket, &msg, 0), 0);
+	ensure_ge (sendmsg(where, &msg, 0), 0);
 }
 
 static
