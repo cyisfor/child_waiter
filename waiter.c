@@ -37,8 +37,6 @@ static void capturing_err(void) {
 		return;
 	}
 
-	dup2(fdpipe[0],0);
-	close(fdpipe[0]);
 	close(fdpipe[1]);
 	fcntl(0,F_SETFL,O_NONBLOCK);
 
@@ -52,7 +50,7 @@ static void capturing_err(void) {
 		int roff;
 		int woff;
 	} *infos = NULL;
-	sources[0].fd = 0;
+	sources[0].fd = fdpipe[0];
 	sources[0].events = POLLIN; // POLLPRI?
 	int nsources = 1;
 	
