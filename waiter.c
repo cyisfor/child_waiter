@@ -70,17 +70,17 @@ static void capturing_err(void) {
 					}
 					assert(amt == sizeof(srcpid));
 				}
-				int srcerr;
+				struct strrecvfd srcerr;
 				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
 				if(res < 0) {
 					ensure_eq(errno,EAGAIN);
 					break;
 				}
-				INFO("got new error source %d from %d",srcpid,srcerr);
+				INFO("got new error source %d from %d",srcpid,srcerr.fd);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
-				sources[nsources-1].fd = srcerr;
+				sources[nsources-1].fd = srcerr.fd;
 				sources[nsources-1].events = POLLIN;
 				infos[nsources-2].pid.l = snprintf
 					(infos[nsources-2].pid.s,5,"%d",srcpid);
