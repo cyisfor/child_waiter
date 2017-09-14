@@ -28,17 +28,22 @@ int errcapture = -1;
 #define BUFSIZE 2048
 
 static void capturing_err(void) {
-	int fdpipe[2];
-	pipe(fdpipe);
+	/* copyright trolls bullied linux into not supporting I_SENDFD
+		 so we need to use the more complicated socket based method
+	*/
+	int socks[2];
+	ensure0(socketpair(AF_UNIX,SOCK_SEQPACKET,socks))
 	int pid = fork();
 	if(pid != 0) {
-		close(fdpipe[0]);
-		errcapture = fdpipe[1];
+		close(socks[0]);
+		errcapture = socks[1];
 		return;
 	}
 
-	close(fdpipe[1]);
-	fcntl(0,F_SETFL,O_NONBLOCK);
+	close(socks[1]);
+	dup2(socks[0],0);
+	close(socks[0]);
+	fcntl(0,F_SETFL,fcntl(0,F_GETFL)|O_NONBLOCK);
 
 	struct pollfd *sources = malloc(sizeof(struct pollfd));
 	struct {
@@ -50,7 +55,7 @@ static void capturing_err(void) {
 		int roff;
 		int woff;
 	} *infos = NULL;
-	sources[0].fd = fdpipe[0];
+	sources[0].fd = 0;
 	sources[0].events = POLLIN; // POLLPRI?
 	int nsources = 1;
 	
@@ -60,27 +65,36 @@ static void capturing_err(void) {
 			error(errno,errno,"capture ppoll");
 		}
 		if(sources[0].revents & POLLIN) {
-			int srcpid;
 			for(;;) {
-				if(srcpid == -1) {
-					ssize_t amt = read(sources[0].fd, &srcpid, sizeof(srcpid));
-					if(amt == 0) {
-						assert(errno == EAGAIN);
-						break;
-					}
-					assert(amt == sizeof(srcpid));
-				}
-				struct strrecvfd srcerr;
-				int res = ioctl(sources[0].fd, I_RECVFD, &srcerr);
+				int srcpid;
+				int srcerr;
+				struct msghdr msg = {0};
+				struct iovec io = { .iov_base = &srcpid, .iov_len = sizeof(srcpid) };
+				msg.msg_iov = &io;
+				msg.msg_iovlen = 1;
+
+				char c_buffer[256];
+				msg.msg_control = c_buffer;
+				msg.msg_controllen = sizeof(c_buffer);
+
+				int res = recvmsg(socket, &msg, 0);
 				if(res < 0) {
 					ensure_eq(errno,EAGAIN);
 					break;
 				}
-				INFO("got new error source %d from %d",srcpid,srcerr.fd);
+				ensure_gt(res,0);
+
+				struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+
+				// memcpy to avoid alignment issues, I guess?
+				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
+				struct strrecvfd srcerr;
+
+				INFO("got new error source %d from %d",srcpid,srcerr);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
-				sources[nsources-1].fd = srcerr.fd;
+				sources[nsources-1].fd = srcerr;
 				sources[nsources-1].events = POLLIN;
 				infos[nsources-2].pid.l = snprintf
 					(infos[nsources-2].pid.s,5,"%d",srcpid);
@@ -156,9 +170,28 @@ static void capturing_err(void) {
 
 static
 void send_fd(int where, int pid, int fd) {
-	ensure_eq(sizeof(pid), write(where,&pid,sizeof(pid)));
-	ensure_ne(where,fd);
-	ensure0(ioctl(where, I_SENDFD, fd));
+	struct msghdr msg = {};
+	char buf[CMSG_SPACE(sizeof(fd))];
+	memset(buf, '\0', sizeof(buf));
+
+  struct iovec io = { .iov_base = &pid, .iov_len = sizeof(pid) };
+
+	msg.msg_iov = &io;
+	msg.msg_iovlen = 1;
+	msg.msg_control = buf;
+	msg.msg_controllen = sizeof(buf);
+
+	struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg);
+	// "this is a socket we're sending" = SCM_RIGHTS
+	cmsg->cmsg_level = SOL_SOCKET;
+	cmsg->cmsg_type = SCM_RIGHTS;
+	cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
+
+	memcpy(CMSG_DATA(cmsg), &fd, sizeof(fd));
+
+	msg.msg_controllen = cmsg->cmsg_len;
+
+	ensure_ge (sendmsg(socket, &msg, 0), 0);
 }
 
 static
