@@ -29,13 +29,18 @@ int errcapture = -1;
 
 static void capturing_err(void) {
 	int fdpipe[2];
-	pipe2(fdpipe,O_NONBLOCK);
+	pipe(fdpipe);
 	int pid = fork();
 	if(pid != 0) {
 		close(fdpipe[0]);
 		errcapture = fdpipe[1];
 		return;
 	}
+
+	dup2(fdpipe[0],0);
+	close(fdpipe[0]);
+	close(fdpipe[1]);
+	fcntl(0,F_SETFL,O_NONBLOCK);
 
 	struct pollfd *sources = malloc(sizeof(struct pollfd));
 	struct {
@@ -47,12 +52,11 @@ static void capturing_err(void) {
 		int roff;
 		int woff;
 	} *infos = NULL;
-	sources[0].fd = fdpipe[0];
+	sources[0].fd = 0;
 	sources[0].events = POLLIN; // POLLPRI?
 	int nsources = 1;
 	
-	close(fdpipe[1]);
-	
+
 	for(;;) {
 		int n = ppoll(sources,nsources,NULL,NULL);
 		if(n == 0) {
@@ -290,4 +294,3 @@ bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
 int waiter_processes(void) {
 	return child_processes;
 }
-
