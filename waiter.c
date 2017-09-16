@@ -41,14 +41,13 @@ void report(int revents, const char* fmt, ...) {
 	} else if(revents & POLLNVAL) {
 		fwrite(LITLEN(" invalid socket"),1,stderr);
 	} else if(revents & POLLHUP) {
-		fwrite(LITLEN(" hung up."),1,stderr);
+		fwrite(LITLEN(" hung up.\n"),1,stderr);
 		return;
 	} else {
 		fwrite(LITLEN(" unknown!"),1,stderr);
 	}
 	fwrite(LITLEN(" with events "),1,stderr);
-	fprintf(stderr,"%x:", revents);
-}
+	fprintf(stderr,"%x\n", revents);
 }
 
 static void capturing_err(void) {
@@ -144,7 +143,7 @@ static void capturing_err(void) {
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents == 0) continue;
 			if(sources[i].revents != POLLIN) {
-				report(i,"source %d:%d",i,infos[i].pid);
+				report(sources[i].revents,"source %d:%d",i,infos[i].pid);
 				close(sources[i].fd);
 				sources[i].fd = -1;
 				sources[i].events = 0;
