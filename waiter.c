@@ -143,7 +143,7 @@ static void capturing_err(void) {
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents == 0) continue;
 			if(sources[i].revents != POLLIN) {
-				report(sources[i].revents,"source %d:%d",i,infos[i].pid);
+				report(sources[i].revents,"source %d:%.*s",i,infos[i].pid.l,infos[i].pid.s);
 				close(sources[i].fd);
 				sources[i].fd = -1;
 				sources[i].events = 0;
