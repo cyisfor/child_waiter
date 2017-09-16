@@ -105,15 +105,24 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
-#define REPORT(i,what,msg)												\
-			if(sources[i].revents & POLL ## what) {		\
-				INFO(msg);															\
+			void report(int revents, const char* fmt, ...) {
+				va_list arg;
+				va_start(arg, fmt);
+				vfprintf(stderr,fmt,arg);
+				if(revents & POLLERR) {
+					fwrite(LITLEN(" error"),1,stderr);
+				} else if(revents & POLLNVAL) {
+					fwrite(LITLEN(" invalid socket"),1,stderr);
+				} else if(revents & POLLHUP) {
+					fwrite(LITLEN(" hung up."),1,stderr);
+					return;
+				} else {
+					fwrite(LITLEN(" unknown!"),1,stderr);
+				}
+				fwrite(LITLEN(" with events "),1,stderr);
+				fprintf(stderr,"%x:", revents);
 			}
-#define REPORTS(i,prefix,...) INFO(prefix " with events %1$x:", sources[i].revents, ## __VA_ARGS__); \
-			REPORT(i,HUP,"hangup"); \
-			REPORT(i,ERR,"error"); \
-			REPORT(i,NVAL,"invalid socket")
-			REPORTS(0,"ppoll socket failed");
+			report(sockets[0].revents,"ppoll socket failed");
 			exit(0);
 		}
 
@@ -128,7 +137,7 @@ static void capturing_err(void) {
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents == 0) continue;
 			if(sources[i].revents != POLLIN) {
-				REPORTS(i,"source %2$d failed",i);
+				report(i,"source %d:%d",i,infos[i].pid);
 				close(sources[i].fd);
 				sources[i].fd = -1;
 				sources[i].events = 0;
