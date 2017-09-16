@@ -7,7 +7,10 @@
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 #include <sys/poll.h> // ppoll
+#include <sys/socket.h>
+
 #include <unistd.h> // read
+#include <stdarg.h> // va_*
 
 #include <time.h>
 #include <error.h>
@@ -17,7 +20,7 @@
 #include <stdio.h> // perror
 #include <string.h>
 #include <fcntl.h> // O_*
-#include <sys/socket.h>
+
 
 static int child_processes = 0;
 
@@ -122,7 +125,7 @@ static void capturing_err(void) {
 				fwrite(LITLEN(" with events "),1,stderr);
 				fprintf(stderr,"%x:", revents);
 			}
-			report(sockets[0].revents,"ppoll socket failed");
+			report(sources[0].revents,"ppoll socket failed");
 			exit(0);
 		}
 
