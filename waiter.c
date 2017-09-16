@@ -126,6 +126,7 @@ static void capturing_err(void) {
 		}
 
 		for(i=1;i<nsources;++i) {
+			if(sources[i].revents == 0) continue;
 			if(sources[i].revents != POLLIN) {
 				REPORTS(i,"source %2$d failed",i);
 				close(sources[i].fd);
