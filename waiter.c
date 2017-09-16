@@ -42,12 +42,14 @@ void report(int revents, const char* fmt, ...) {
 		fwrite(LITLEN(" invalid socket"),1,stderr);
 	} else if(revents & POLLHUP) {
 		fwrite(LITLEN(" hung up.\n"),1,stderr);
+		fflush(stderr);
 		return;
 	} else {
 		fwrite(LITLEN(" unknown!"),1,stderr);
 	}
 	fwrite(LITLEN(" with events "),1,stderr);
 	fprintf(stderr,"%x\n", revents);
+	fflush(stderr);
 }
 
 static void capturing_err(void) {
@@ -112,7 +114,7 @@ static void capturing_err(void) {
 				// memcpy to avoid alignment issues, I guess?
 				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
 
-				INFO("got new error source %d from %d",srcerr,srcpid);
+				INFO("got new stderr source %d from %d",srcerr,srcpid);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
@@ -128,7 +130,7 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
-			report(sources[0].revents,"ppoll socket failed");
+			report(sources[0].revents,"ppoll socket");
 			exit(0);
 		}
 
