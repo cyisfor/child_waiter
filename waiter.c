@@ -105,12 +105,11 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
-			INFO(
 #define REPORT(i,what,msg)												\
 			if(sources[i].revents & POLL ## what) {		\
 				INFO(msg);															\
 			}
-			#define REPORTS(i,prefix,...) INFO(prefix " with events %1$x:",sources[i].revents, ## __VA_ARG__); \
+#define REPORTS(i,prefix,...) INFO(prefix " with events %1$x:", sources[i].revents, ## __VA_ARGS__); \
 			REPORT(i,HUP,"hangup"); \
 			REPORT(i,ERR,"error"); \
 			REPORT(i,NVAL,"invalid socket")
