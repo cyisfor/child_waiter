@@ -105,15 +105,16 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
-			INFO("ppoll socket failed with events %d:",sources[0].revents);
-#define REPORT(what,msg)												\
-			if(sources[0].revents & POLL ## what) {		\
+			INFO(
+#define REPORT(i,what,msg)												\
+			if(sources[i].revents & POLL ## what) {		\
 				INFO(msg);															\
 			}
-			REPORT(HUP,"hangup");
-			REPORT(ERR,"error");
-			REPORT(NVAL,"invalid socket");
-				
+			#define REPORTS(i,prefix,...) INFO(prefix " with events %1$x:",sources[i].revents, ## __VA_ARGS__); \
+			REPORT(i,HUP,"hangup"); \
+			REPORT(i,ERR,"error"); \
+			REPORT(i,NVAL,"invalid socket")
+			REPORTS(0,"ppoll socket failed");
 			exit(0);
 		}
 
@@ -127,7 +128,7 @@ static void capturing_err(void) {
 
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents != POLLIN) {
-				INFO("source %d failed with events %x:",i,sources[i].revents);
+				REPORTS(i,"source %2$d failed",i);
 				REPORT(HUP,"hangup");
 				REPORT(ERR,"error");
 				REPORT(NVAL,"invalid socket");
