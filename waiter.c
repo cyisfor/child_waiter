@@ -127,7 +127,7 @@ static void capturing_err(void) {
 
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents != POLLIN) {
-				INFO("source %d failed with events %d:",i,sources[i].revents);
+				INFO("source %d failed with events %x:",i,sources[i].revents);
 				REPORT(HUP,"hangup");
 				REPORT(ERR,"error");
 				REPORT(NVAL,"invalid socket");
