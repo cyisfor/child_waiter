@@ -110,7 +110,7 @@ static void capturing_err(void) {
 			if(sources[i].revents & POLL ## what) {		\
 				INFO(msg);															\
 			}
-			#define REPORTS(i,prefix,...) INFO(prefix " with events %1$x:",sources[i].revents, ## __VA_ARGS__); \
+			#define REPORTS(i,prefix,...) INFO(prefix " with events %1$x:",sources[i].revents, ## __VA_ARG__); \
 			REPORT(i,HUP,"hangup"); \
 			REPORT(i,ERR,"error"); \
 			REPORT(i,NVAL,"invalid socket")
@@ -129,9 +129,6 @@ static void capturing_err(void) {
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents != POLLIN) {
 				REPORTS(i,"source %2$d failed",i);
-				REPORT(HUP,"hangup");
-				REPORT(ERR,"error");
-				REPORT(NVAL,"invalid socket");
 				close(sources[i].fd);
 				sources[i].fd = -1;
 				sources[i].events = 0;
