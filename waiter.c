@@ -105,7 +105,15 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
-			INFO("ppoll socket failed with events %x\n",sources[0].revents);
+			INFO("ppoll socket failed with events %d:",sources[0].revents);
+#define REPORT(what,msg)												\
+			if(sources[0].revents & POLL ## what) {		\
+				INFO(msg);															\
+			}
+			REPORT(HUP,"hangup");
+			REPORT(ERR,"error");
+			REPORT(NVAL,"invalid socket");
+				
 			exit(0);
 		}
 
