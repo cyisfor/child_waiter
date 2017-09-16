@@ -64,7 +64,7 @@ static void capturing_err(void) {
 		if(n == 0) {
 			error(errno,errno,"capture ppoll");
 		}
-		if(sources[0].revents & POLLIN) {
+		if(sources[0].revents == POLLIN) {
 			for(;;) {
 				int srcpid;
 				int srcerr;
@@ -103,7 +103,11 @@ static void capturing_err(void) {
 				srcpid = -1;
 			}
 			continue;
-		} 
+		} else if(sources[0].revents) {
+			// something went wrong!
+			INFO("ppoll socket failed with events %x\n",sources[0].revents);
+			exit(0);
+		}
 
 		int i;
 		void writeit(size_t amt) {
