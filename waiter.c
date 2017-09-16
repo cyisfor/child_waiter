@@ -30,6 +30,27 @@ int errcapture = -1;
 
 #define BUFSIZE 2048
 
+static
+void report(int revents, const char* fmt, ...) {
+	fwrite(LITLEN("REPORT "),1,stderr);
+	va_list arg;
+	va_start(arg, fmt);
+	vfprintf(stderr,fmt,arg);
+	if(revents & POLLERR) {
+		fwrite(LITLEN(" error"),1,stderr);
+	} else if(revents & POLLNVAL) {
+		fwrite(LITLEN(" invalid socket"),1,stderr);
+	} else if(revents & POLLHUP) {
+		fwrite(LITLEN(" hung up."),1,stderr);
+		return;
+	} else {
+		fwrite(LITLEN(" unknown!"),1,stderr);
+	}
+	fwrite(LITLEN(" with events "),1,stderr);
+	fprintf(stderr,"%x:", revents);
+}
+}
+
 static void capturing_err(void) {
 	/* copyright trolls bullied linux into not supporting I_SENDFD
 		 so we need to use the more complicated socket based method
@@ -108,23 +129,6 @@ static void capturing_err(void) {
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
-			void report(int revents, const char* fmt, ...) {
-				va_list arg;
-				va_start(arg, fmt);
-				vfprintf(stderr,fmt,arg);
-				if(revents & POLLERR) {
-					fwrite(LITLEN(" error"),1,stderr);
-				} else if(revents & POLLNVAL) {
-					fwrite(LITLEN(" invalid socket"),1,stderr);
-				} else if(revents & POLLHUP) {
-					fwrite(LITLEN(" hung up."),1,stderr);
-					return;
-				} else {
-					fwrite(LITLEN(" unknown!"),1,stderr);
-				}
-				fwrite(LITLEN(" with events "),1,stderr);
-				fprintf(stderr,"%x:", revents);
-			}
 			report(sources[0].revents,"ppoll socket failed");
 			exit(0);
 		}
