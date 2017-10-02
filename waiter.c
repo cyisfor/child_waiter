@@ -263,7 +263,7 @@ bool waiter_wait(struct pollfd* poll, int npoll, time_t sec) {
 	};
 	int res;
 POLL_AGAIN:
-	res = ppoll(poll,1,&timeout, &waiter_sigmask);
+	res = ppoll(poll,npoll,&timeout, &waiter_sigmask);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
