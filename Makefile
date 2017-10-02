@@ -8,7 +8,7 @@ all: main test_sshutil
 main: $(O)
 	$(LINK)
 
-N=test_sshutil sshutil  note
+N=test_sshutil sshutil note waiter
 test_sshutil: $(O)
 
 d/%: %.c | d
