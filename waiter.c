@@ -32,6 +32,7 @@ int errcapture = -1;
 
 static
 void report(int revents, const char* fmt, ...) {
+	fprintf(stderr, ">%d ",getpid());
 	fwrite(LITLEN("REPORT "),1,stderr);
 	va_list arg;
 	va_start(arg, fmt);
@@ -64,7 +65,7 @@ static void capturing_err(void) {
 		errcapture = socks[1];
 		return;
 	}
-
+	fprintf(stderr, "capturing error with %d\n",getpid());
 	close(socks[1]);
 	dup2(socks[0],0);
 	close(socks[0]);
@@ -73,7 +74,7 @@ static void capturing_err(void) {
 	struct pollfd *sources = malloc(sizeof(struct pollfd));
 	struct {
 		struct {
-			char s[5];
+			char s[6];
 			int l;
 		} pid;
 		char* buf;
@@ -121,7 +122,7 @@ static void capturing_err(void) {
 				sources[nsources-1].fd = srcerr;
 				sources[nsources-1].events = POLLIN;
 				infos[nsources-2].pid.l = snprintf
-					(infos[nsources-2].pid.s,5,"%d",srcpid);
+					(infos[nsources-2].pid.s,6,"%d",srcpid);
 				infos[nsources-2].buf = malloc(0x100);
 				infos[nsources-2].roff = 0;
 				infos[nsources-2].woff = 0;
@@ -150,12 +151,6 @@ static void capturing_err(void) {
 				sources[i].fd = -1;
 				sources[i].events = 0;
 				continue;
-			}
-			void writeit(size_t amt) {
-				write(2,infos[i-1].pid.s,infos[i-1].pid.l);
-				write(2,LITLEN("> "));
-				write(2,infos[i-1].buf+infos[i-1].roff,amt);
-				write(2,LITLEN("\n"));
 			}
 			for(;;) {
 				ssize_t amt = read(sources[i].fd,
@@ -349,7 +344,8 @@ void waiter_check(int status, bool timeout, int expected) {
 }
 
 bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
-	assert(child_processes == 1);
+	//assert(child_processes == 1);
+	// might be long lived processes running... just make sure the one that dies is us
 	struct pollfd poll = {
 		.fd = signalfd,
 		.events = POLLIN
