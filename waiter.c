@@ -235,17 +235,18 @@ void capture_err(void) {
 }
 
 static sigset_t sigmask;
+static sigset_t addmask;
 
 void waiter_setup(void) {
-	sigemptyset(&sigmask);
-	sigaddset(&sigmask,SIGCHLD);
+	sigemptyset(&addmask);
+	sigaddset(&addmask,SIGCHLD);
 
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	
 // waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
-	int res = sigprocmask(SIG_BLOCK,&sigmask,NULL);
+	int res = sigprocmask(SIG_BLOCK,&addmask, &sigmask);
 	assert(res == 0);
 	// but signalfd only unmasks SIGCHLD, not any in oldmask
 }
@@ -253,7 +254,7 @@ void waiter_setup(void) {
 // call this in every child process before exec.
 void waiter_unblock(void) {
 	// unblock leaves signals not in child
-	sigprocmask(SIG_UNBLOCK,&sigmask,NULL);
+	sigprocmask(SIG_SETMASK,&sigmask,NULL);
 }
 
 // wait and process signals
@@ -282,7 +283,7 @@ void waiter_drain(void) {
 	siginfo_t info;
 	const static struct timespec poll = {0,0};
 	for(;;) {
-		int res = sigtimedwait(&sigmask, &info, &poll);
+		int res = sigtimedwait(&addmask, &info, &poll);
 		if(res < 0) {
 			if(errno == EAGAIN) return;
 			perror("drain");
@@ -336,7 +337,7 @@ void waiter_check(int status, bool timeout, int expected) {
 }
 
 bool waiter_waitfor(time_t sec, int expected, int *status) {
-	//assert(child_processes == 1);
+	//assert(child_processes == 1); as long as none of them die, processes are ok
 	const struct timespec t = {
 		sec, 0
 	};
@@ -349,6 +350,7 @@ bool waiter_waitfor(time_t sec, int expected, int *status) {
 	waiter_drain();
 	int test = waiter_next(status);
 	if(test != expected) {
+		// fail fast
 		error(23,0,"wrong pid returned expected %d got %d",expected,test);
 	}
 	return false;
