@@ -244,14 +244,15 @@ void capture_err(void) {
 */
 
 
-struct {
-	static sigset_t original;
-	static sigset_t nochild;
-	static sigset_t onlychild;
+static
+struct masks {
+	sigset_t original;
+	sigset_t nochild;
+	sigset_t onlychild;
 } mask;
 
 void waiter_setup(void) {
-	sigemptyset(&mask.onlychils);
+	sigemptyset(&mask.onlychild);
 	sigaddset(&mask.onlychild,SIGCHLD);
 
 	capturing_err();
@@ -264,7 +265,7 @@ void waiter_setup(void) {
 	assert(res == 0);
 	sigdelset(&mask.nochild, SIGCHLD);
 
-	res = sigprocmask(SIG_BLOCK,&mask.add, &mask.original);
+	res = sigprocmask(SIG_BLOCK,&mask.onlychild, &mask.original);
 	assert(res == 0);		 
 }
 
