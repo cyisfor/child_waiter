@@ -237,7 +237,7 @@ void capture_err(void) {
 const sigset_t* waiter_setup(void) {
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
-	sigset_t* sigmask = malloc(sizeof(sigset_t));
+	static sigset_t sigmask;
 	
 	sigemptyset(&sigmask);
 	sigaddset(&sigmask,SIGCHLD);
@@ -246,7 +246,7 @@ const sigset_t* waiter_setup(void) {
 	int res = sigprocmask(SIG_BLOCK,&sigmask,NULL);
 	assert(res == 0);
 	// but signalfd only unmasks SIGCHLD, not any in oldmask
-	return sigmask;
+	return &sigmask;
 }
 
 // call this in every child process before exec.
