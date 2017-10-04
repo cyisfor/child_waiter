@@ -257,13 +257,25 @@ void waiter_setup(void) {
 	sigaddset(&mask.onlychild,SIGCHLD);
 	sigaddset(&mask.onlychild,SIGUSR1);
 
-// waiter_fork may have been called before but the child died
-	// SIG_BLOCK is the union of old mask and child, btw
-	capturing_err();
-
 	int res;
 	res = sigprocmask(SIG_UNBLOCK,&mask.onlychild, &mask.original);
 	assert(res == 0);
+
+	capturing_err();
+
+	/* Since programmers are idiots, they conveniently omit this from all documentation.
+		 The default handler for SIGCHLD secretly has the SA_RESTART flag set.
+		 That means SIGCHLD won't interrupt ppoll, or pselect.
+		 That means signal blocking is *completely useless* for SIGCHLD, one of the only
+		 times it's actually very helpful.
+
+		 Solution: make our own stupid signal handler, then set sa_flags to 0.
+		 (doesn't work to pass SIG_DFL and set flags to 0.
+	*/
+	struct sigaction sa = {};
+	sa.sa_handler = derp;
+	sa.sa_flags = 0;
+	sigaction(SIGCHLD,&sa,NULL);
 
 	res = sigprocmask(SIG_BLOCK,&mask.onlychild, &mask.nochild);
 	assert(res == 0);		 
