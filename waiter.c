@@ -256,7 +256,10 @@ void waiter_unblock(const sigset_t* sigmask) {
 }
 
 // wait and process signals
-int waiter_wait(const sigset_t* sigmask, struct pollfd* poll, int npoll, time_t sec) {
+int waiter_wait(const sigset_t* sigmask,
+								struct pollfd* poll,
+								int npoll,
+								time_t timeout) {
 	const static struct timespec timeout = {
 		.tv_sec = sec
 	};
@@ -267,9 +270,9 @@ POLL_AGAIN:
 		switch(errno) {
 		case EINTR:
 			waiter_drain(sigmask);
-			goto POLL_AGAIN;
+			return res;
 		};
-		error(0,errno,"ppoll");
+		error(0,errno,"waiter wait");
 		abort();
 	}
 	return res;
@@ -333,7 +336,7 @@ void waiter_check(int status, bool timeout, int expected) {
 	error(WEXITSTATUS(status),0,"%d exited with %d",expected,WEXITSTATUS(status));
 }
 
-bool waiter_waitfor(sigset_t* sigmask, time_t sec, int expected, int *status) {
+bool waiter_waitfor(const sigset_t* sigmask, time_t sec, int expected, int *status) {
 	//assert(child_processes == 1);
 	const struct timespec t = {
 		sec, 0
