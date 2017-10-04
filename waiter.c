@@ -234,27 +234,44 @@ void capture_err(void) {
 	close(io[1]);
 }
 
-static sigset_t sigmask;
-static sigset_t addmask;
+/* the original signal mask could have blocked SIGCHLD
+	 so if we pass the orginal signal mask to ppoll... it doesn't EINTR for child processes.
+	 So we need to pass the original mask to forked processes, but to ppoll we must pass the
+	 original mask, explicitly minus SIGCHLD.
+
+	 And to sigtimedwait, we must pass a sigset_t containing only SIGCHLD, so we need three
+	 different sigset_t's.
+*/
+
+
+struct {
+	static sigset_t original;
+	static sigset_t nochild;
+	static sigset_t onlychild;
+} mask;
 
 void waiter_setup(void) {
-	sigemptyset(&addmask);
-	sigaddset(&addmask,SIGCHLD);
+	sigemptyset(&mask.onlychils);
+	sigaddset(&mask.onlychild,SIGCHLD);
 
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	
 // waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
-	int res = sigprocmask(SIG_BLOCK,&addmask, &sigmask);
+	int res;
+	res = sigprocmask(SIG_SETMASK,NULL, &mask.nochild);
 	assert(res == 0);
-	// but signalfd only unmasks SIGCHLD, not any in oldmask
+	sigdelset(&mask.nochild, SIGCHLD);
+
+	res = sigprocmask(SIG_BLOCK,&mask.add, &mask.original);
+	assert(res == 0);		 
 }
 
 // call this in every child process before exec.
 void waiter_unblock(void) {
-	// unblock leaves signals not in child
-	sigprocmask(SIG_SETMASK,&sigmask,NULL);
+	// unblock before exec, or the signal mask remains :(
+	sigprocmask(SIG_SETMASK,&mask.original,NULL);
 }
 
 // wait and process signals
@@ -265,7 +282,7 @@ int waiter_wait(struct pollfd* poll,
 	timeout.tv_sec = timeoutsec;
 	int res;
 POLL_AGAIN:
-	res = ppoll(poll,npoll,&timeout, &sigmask);
+	res = ppoll(poll,npoll,&timeout, &mask.nochild);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
@@ -283,7 +300,7 @@ void waiter_drain(void) {
 	siginfo_t info;
 	const static struct timespec poll = {0,0};
 	for(;;) {
-		int res = sigtimedwait(&addmask, &info, &poll);
+		int res = sigtimedwait(&mask.onlychild, &info, &poll);
 		if(res < 0) {
 			if(errno == EAGAIN) return;
 			perror("drain");
@@ -342,7 +359,7 @@ bool waiter_waitfor(time_t sec, int expected, int *status) {
 		sec, 0
 	};
 	siginfo_t info;
-	int ret = sigtimedwait(&sigmask, &info, &t);
+	int ret = sigtimedwait(&mask.onlychild, &info, &t);
 	if(ret < 0) {
 		// timed out
 		if(errno == EAGAIN) return true;
