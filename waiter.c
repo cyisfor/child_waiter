@@ -236,8 +236,9 @@ void capture_err(void) {
 
 /* the original signal mask could have blocked SIGCHLD
 	 so if we pass the orginal signal mask to ppoll... it doesn't EINTR for child processes.
-	 So we need to pass the original mask to forked processes, but to ppoll we must pass the
-	 original mask, explicitly minus SIGCHLD.
+	 So we need to pass the original mask to forked processes
+
+	 To ppoll we must pass the original mask, explicitly minus SIGCHLD.
 
 	 And to sigtimedwait, we must pass a sigset_t containing only SIGCHLD, so we need three
 	 different sigset_t's.
@@ -254,18 +255,17 @@ struct masks {
 void waiter_setup(void) {
 	sigemptyset(&mask.onlychild);
 	sigaddset(&mask.onlychild,SIGCHLD);
+	sigaddset(&mask.onlychild,SIGUSR1);
 
-	capturing_err();
-	// note still have to unblock SIGCHLD even when CLOEXEC is set!
-	
 // waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
-	int res;
-	res = sigprocmask(SIG_SETMASK,NULL, &mask.nochild);
-	assert(res == 0);
-	sigdelset(&mask.nochild, SIGCHLD);
+	capturing_err();
 
-	res = sigprocmask(SIG_BLOCK,&mask.onlychild, &mask.original);
+	int res;
+	res = sigprocmask(SIG_UNBLOCK,&mask.onlychild, &mask.original);
+	assert(res == 0);
+
+	res = sigprocmask(SIG_BLOCK,&mask.onlychild, &mask.nochild);
 	assert(res == 0);		 
 }
 
@@ -282,8 +282,7 @@ int waiter_wait(struct pollfd* poll,
 	static struct timespec timeout = {};
 	timeout.tv_sec = timeoutsec;
 	int res;
-POLL_AGAIN:
-	res = ppoll(poll,npoll,&timeout, &mask.nochild);
+	res = ppoll(poll,npoll,timeoutsec == -1 ? NULL : &timeout, &mask.nochild);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
