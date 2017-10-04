@@ -234,10 +234,11 @@ void capture_err(void) {
 	close(io[1]);
 }
 
-const sigset_t* waiter_setup(void) {
+static sigset_t sigmask;
+
+void waiter_setup(void) {
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
-	static sigset_t sigmask;
 	
 	sigemptyset(&sigmask);
 	sigaddset(&sigmask,SIGCHLD);
@@ -246,18 +247,16 @@ const sigset_t* waiter_setup(void) {
 	int res = sigprocmask(SIG_BLOCK,&sigmask,NULL);
 	assert(res == 0);
 	// but signalfd only unmasks SIGCHLD, not any in oldmask
-	return &sigmask;
 }
 
 // call this in every child process before exec.
-void waiter_unblock(const sigset_t* sigmask) {
+void waiter_unblock(void) {
 	// unblock leaves signals not in child
 	sigprocmask(SIG_UNBLOCK,&sigmask,NULL);
 }
 
 // wait and process signals
-int waiter_wait(const sigset_t* sigmask,
-								struct pollfd* poll,
+int waiter_wait(struct pollfd* poll,
 								int npoll,
 								time_t timeout) {
 	const static struct timespec timeout = {
@@ -269,7 +268,7 @@ POLL_AGAIN:
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
-			waiter_drain(sigmask);
+			waiter_drain();
 			return res;
 		};
 		error(0,errno,"waiter wait");
@@ -279,11 +278,11 @@ POLL_AGAIN:
 }
 
 // call this to drain a signalfd, and then waiter_next until it returns 0
-void waiter_drain(const sigset_t* sigmask) {
+void waiter_drain(void) {
 	siginfo_t info;
 	const static struct timeout poll = {0,0};
 	for(;;) {
-		int res = sigtimedwait(sigmask, &info, &poll);
+		int res = sigtimedwait(&sigmask, &info, &poll);
 		if(res < 0) {
 			if(errno == EAGAIN) return;
 			perror("drain");
@@ -317,7 +316,7 @@ int waiter_fork(void) {
 	int pid = fork();
 	if(pid == 0) {
 		capture_err();
-		waiter_unblock();
+		waiter_unblock(waiter);
 	} else {
 		++child_processes;
 		--level;
@@ -336,18 +335,18 @@ void waiter_check(int status, bool timeout, int expected) {
 	error(WEXITSTATUS(status),0,"%d exited with %d",expected,WEXITSTATUS(status));
 }
 
-bool waiter_waitfor(const sigset_t* sigmask, time_t sec, int expected, int *status) {
+bool waiter_waitfor(time_t sec, int expected, int *status) {
 	//assert(child_processes == 1);
 	const struct timespec t = {
 		sec, 0
 	};
 	siginfo_t info;
-	int ret = sigtimedwait(sigmask, &info, &t);
+	int ret = sigtimedwait(&sigmask, &info, &t);
 	if(ret < 0) {
 		// timed out
 		if(errno == EAGAIN) return true;
 	}
-	waiter_drain(sigmask);
+	waiter_drain();
 	int test = waiter_next(status);
 	if(test != expected) {
 		error(23,0,"wrong pid returned expected %d got %d",expected,test);
