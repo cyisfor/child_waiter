@@ -244,6 +244,7 @@ void capture_err(void) {
 	 different sigset_t's.
 */
 
+void derp() {}
 
 static
 struct masks {
@@ -312,14 +313,13 @@ void waiter_drain(void) {
 	siginfo_t info;
 	const static struct timespec poll = {0,0};
 	for(;;) {
-		int res = sigtimedwait(&mask.onlychild, &info, &poll);
-		if(res < 0) {
+		int sig = sigtimedwait(&mask.onlychild, &info, &poll);
+		if(sig < 0) {
 			if(errno == EAGAIN) return;
 			perror("drain");
 			abort();
 		}
-		assert(res != 0);
-		assert(res == sizeof(info));
+		assert(sig != 0);
 		assert(info.si_signo == SIGCHLD);
 	}
 }
