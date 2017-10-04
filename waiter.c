@@ -237,11 +237,12 @@ void capture_err(void) {
 static sigset_t sigmask;
 
 void waiter_setup(void) {
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask,SIGCHLD);
+
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	
-	sigemptyset(&sigmask);
-	sigaddset(&sigmask,SIGCHLD);
 // waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
 	int res = sigprocmask(SIG_BLOCK,&sigmask,NULL);
@@ -258,10 +259,9 @@ void waiter_unblock(void) {
 // wait and process signals
 int waiter_wait(struct pollfd* poll,
 								int npoll,
-								time_t timeout) {
-	const static struct timespec timeout = {
-		.tv_sec = sec
-	};
+								const time_t timeoutsec) {
+	static struct timespec timeout = {};
+	timeout.tv_sec = timeoutsec;
 	int res;
 POLL_AGAIN:
 	res = ppoll(poll,npoll,&timeout, &sigmask);
@@ -280,7 +280,7 @@ POLL_AGAIN:
 // call this to drain a signalfd, and then waiter_next until it returns 0
 void waiter_drain(void) {
 	siginfo_t info;
-	const static struct timeout poll = {0,0};
+	const static struct timespec poll = {0,0};
 	for(;;) {
 		int res = sigtimedwait(&sigmask, &info, &poll);
 		if(res < 0) {
@@ -316,7 +316,7 @@ int waiter_fork(void) {
 	int pid = fork();
 	if(pid == 0) {
 		capture_err();
-		waiter_unblock(waiter);
+		waiter_unblock();
 	} else {
 		++child_processes;
 		--level;
