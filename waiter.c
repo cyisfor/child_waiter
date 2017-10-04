@@ -234,72 +234,61 @@ void capture_err(void) {
 	close(io[1]);
 }
 
-
 const sigset_t* waiter_setup(void) {
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
 	sigset_t* sigmask = malloc(sizeof(sigset_t));
-
-
-	sigemptyset(&waiter_sigmask);
-	sigaddset(&waiter_sigmask,SIGCHLD);
+	
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask,SIGCHLD);
 // waiter_fork may have been called before but the child died
 	// SIG_BLOCK is the union of old mask and child, btw
-	int res = sigprocmask(SIG_BLOCK,&waiter_sigmask,NULL);
+	int res = sigprocmask(SIG_BLOCK,&sigmask,NULL);
 	assert(res == 0);
 	// but signalfd only unmasks SIGCHLD, not any in oldmask
-	return signalfd(-1, &waiter_sigmask, SFD_NONBLOCK | SFD_CLOEXEC);
+	return sigmask;
 }
 
 // call this in every child process before exec.
-void waiter_unblock(void) {
+void waiter_unblock(const sigset_t* sigmask) {
 	// unblock leaves signals not in child
-	sigprocmask(SIG_UNBLOCK,&waiter_sigmask,NULL);
+	sigprocmask(SIG_UNBLOCK,&sigmask,NULL);
 }
 
 // wait and process signals
-bool waiter_wait(struct pollfd* poll, int npoll, time_t sec) {
-	struct timespec timeout = {
+int waiter_wait(const sigset_t* sigmask, struct pollfd* poll, int npoll, time_t sec) {
+	const static struct timespec timeout = {
 		.tv_sec = sec
 	};
 	int res;
 POLL_AGAIN:
-	res = ppoll(poll,npoll,&timeout, &waiter_sigmask);
+	res = ppoll(poll,npoll,&timeout, &sigmask);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
+			waiter_drain(sigmask);
 			goto POLL_AGAIN;
 		};
 		error(0,errno,"ppoll");
 		abort();
 	}
-	if(res == 0) return false; // timeout
-	assert(res == 1);
-	return true;
+	return res;
 }
 
 // call this to drain a signalfd, and then waiter_next until it returns 0
-void waiter_drain(int signalfd) {
-	struct signalfd_siginfo info;
+void waiter_drain(const sigset_t* sigmask) {
+	siginfo_t info;
+	const static struct timeout poll = {0,0};
 	for(;;) {
-		ssize_t amt = read(signalfd,&info,sizeof(info));
-		if(amt == 0) break;
-		if(amt < 0) {
-			switch(errno) {
-			case EINTR:
-				continue;
-			case EAGAIN:
-				return;
-			};
+		int res = sigtimedwait(sigmask, &info, &poll);
+		if(res < 0) {
+			if(errno == EAGAIN) return;
 			perror("drain");
 			abort();
 		}
-
-		assert(amt == sizeof(info));
-		assert(info.ssi_signo == SIGCHLD);
-		/* ignore info.ssi_status, because a zombie process still needs to be reaped,
-			 this is only the status of ONE of the multiple processes that triggered
-			 this signal. Same goes for ssi_pid */
+		assert(res != 0);
+		assert(res == sizeof(info));
+		assert(info.si_signo == SIGCHLD);
 	}
 }
 
@@ -344,17 +333,18 @@ void waiter_check(int status, bool timeout, int expected) {
 	error(WEXITSTATUS(status),0,"%d exited with %d",expected,WEXITSTATUS(status));
 }
 
-bool waiter_waitfor(int signalfd, time_t sec, int expected, int *status) {
+bool waiter_waitfor(sigset_t* sigmask, time_t sec, int expected, int *status) {
 	//assert(child_processes == 1);
-	// might be long lived processes running... just make sure the one that dies is us
-	struct pollfd poll = {
-		.fd = signalfd,
-		.events = POLLIN
+	const struct timespec t = {
+		sec, 0
 	};
-	if(false == waiter_wait(&poll, 1, sec)) {
-		return true;
+	siginfo_t info;
+	int ret = sigtimedwait(sigmask, &info, &t);
+	if(ret < 0) {
+		// timed out
+		if(errno == EAGAIN) return true;
 	}
-	waiter_drain(signalfd);
+	waiter_drain(sigmask);
 	int test = waiter_next(status);
 	if(test != expected) {
 		error(23,0,"wrong pid returned expected %d got %d",expected,test);
