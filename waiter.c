@@ -24,8 +24,6 @@
 
 static int child_processes = 0;
 
-sigset_t waiter_sigmask;
-
 int errcapture = -1;
 
 #define BUFSIZE 2048
@@ -237,9 +235,12 @@ void capture_err(void) {
 }
 
 
-int waiter_setup(void) {
+const sigset_t* waiter_setup(void) {
 	capturing_err();
 	// note still have to unblock SIGCHLD even when CLOEXEC is set!
+	sigset_t* sigmask = malloc(sizeof(sigset_t));
+
+
 	sigemptyset(&waiter_sigmask);
 	sigaddset(&waiter_sigmask,SIGCHLD);
 // waiter_fork may have been called before but the child died
@@ -256,7 +257,7 @@ void waiter_unblock(void) {
 	sigprocmask(SIG_UNBLOCK,&waiter_sigmask,NULL);
 }
 
-// wait for JUST the signalfd to fire.
+// wait and process signals
 bool waiter_wait(struct pollfd* poll, int npoll, time_t sec) {
 	struct timespec timeout = {
 		.tv_sec = sec
