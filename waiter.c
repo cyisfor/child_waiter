@@ -1,8 +1,5 @@
 #define _GNU_SOURCE // ppoll
 #include "waiter.h"
-#include "note.h"
-#include "mystring.h"
-#include "ensure.h"
 
 #include <sys/signalfd.h>
 #include <sys/wait.h>
@@ -51,12 +48,15 @@ void report(int revents, const char* fmt, ...) {
 	fflush(stderr);
 }
 
-static void capturing_err(void) {
+static int capturing_err(void) {
 	/* copyright trolls bullied linux into not supporting I_SENDFD
 		 so we need to use the more complicated socket based method
 	*/
 	int socks[2];
-	ensure0(socketpair(AF_UNIX,SOCK_SEQPACKET,0,socks))
+	if(0 != socketpair(AF_UNIX,SOCK_SEQPACKET,0,socks)) {
+		perror("socketpair");
+		abort();
+	}
 	int pid = fork();
 	if(pid != 0) {
 		close(socks[0]);
@@ -103,10 +103,16 @@ static void capturing_err(void) {
 
 				int res = recvmsg(0, &msg, 0);
 				if(res <= 0) {
-					ensure_eq(errno,EAGAIN);
+					if(errno != EAGAIN) {
+						perror("recvmsg");
+						abort();
+					}
 					break;
 				}
-				ensure_gt(res,0);
+				if(res == 0) {
+					perror("recvmsg is zero");
+					abort();
+				}
 
 				struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
 
@@ -220,12 +226,18 @@ void send_fd(int where, int pid, int fd) {
 
 	msg.msg_controllen = cmsg->cmsg_len;
 
-	ensure_ge (sendmsg(where, &msg, 0), 0);
+	if (sendmsg(where, &msg, 0) < 0) {
+		perror("sendmsg");
+		abort();
+	}
 }
 
 static
 void capture_err(void) {
-	ensure_ge(errcapture,0);
+	if(errcapture < 0) {
+		perror("can't capture yet...");
+		abort();
+	}
 	int io[2];
 	pipe(io);
 	send_fd(errcapture, getpid(), io[0]);

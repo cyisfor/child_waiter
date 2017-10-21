@@ -1,15 +1,10 @@
-CFLAGS+=-ggdb
-LDFLAGS += -lssh
+CFLAGS+=-ggdb -fPIC
 O=$(foreach name,$(N),$(eval include d/$(name)) $(name).o)
-LINK=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-N=main waiter sshutil note
+LINK=$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-all: main test_sshutil
-main: $(O)
+N=waiter
+libwaiter.a: $(O)
 	$(LINK)
-
-N=test_sshutil sshutil note waiter
-test_sshutil: $(O)
 
 d/%: %.c | d
 	$(CC) $(CFLAGS) -MM -MG -o $@ $<
