@@ -1,6 +1,8 @@
 #define _GNU_SOURCE // ppoll
 #include "waiter.h"
 
+#define LITLEN(a) a,(sizeof(a)-1)
+
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 #include <sys/poll.h> // ppoll
@@ -48,7 +50,7 @@ void report(int revents, const char* fmt, ...) {
 	fflush(stderr);
 }
 
-static int capturing_err(void) {
+static void capturing_err(void) {
 	/* copyright trolls bullied linux into not supporting I_SENDFD
 		 so we need to use the more complicated socket based method
 	*/
@@ -119,7 +121,7 @@ static int capturing_err(void) {
 				// memcpy to avoid alignment issues, I guess?
 				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
 
-				INFO("got new stderr source %d from %d",srcerr,srcpid);
+				//INFO("got new stderr source %d from %d",srcerr,srcpid);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
