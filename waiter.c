@@ -1,6 +1,8 @@
 #define _GNU_SOURCE // ppoll
 #include "waiter.h"
 
+#include <bsd/unistd.h> // setproctitle
+
 #define LITLEN(a) a,(sizeof(a)-1)
 
 #include <sys/signalfd.h>
@@ -65,10 +67,13 @@ static void capturing_err(void) {
 		errcapture = socks[1];
 		return;
 	}
+	setproctitle("errcapture!");
 	fprintf(stderr, "capturing error with %d\n",getpid());
 	close(socks[1]);
-	dup2(socks[0],0);
-	close(socks[0]);
+	if(socks[0] != 0) {
+		dup2(socks[0],0);
+		close(socks[0]);
+	}
 	fcntl(0,F_SETFL,fcntl(0,F_GETFL)|O_NONBLOCK);
 
 	struct pollfd *sources = malloc(sizeof(struct pollfd));
@@ -86,6 +91,7 @@ static void capturing_err(void) {
 	int nsources = 1;
 	
 	for(;;) {
+		fprintf(stderr,"%d sources\n",nsources);
 		int n = ppoll(sources,nsources,NULL,NULL);
 		if(n == 0) {
 			error(errno,errno,"capture ppoll");
@@ -121,11 +127,14 @@ static void capturing_err(void) {
 				// memcpy to avoid alignment issues, I guess?
 				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
 
-				//INFO("got new stderr source %d from %d",srcerr,srcpid);
+				fprintf(stderr, "INFO: got new stderr source %d from %d\n",
+								srcerr,srcpid);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
 				sources[nsources-1].fd = srcerr;
+				fcntl(srcerr,F_SETFL,
+							fcntl(srcerr, F_GETFL) | O_NONBLOCK);
 				sources[nsources-1].events = POLLIN;
 				infos[nsources-2].pid.l = snprintf
 					(infos[nsources-2].pid.s,6,"%d",srcpid);
@@ -134,6 +143,9 @@ static void capturing_err(void) {
 				infos[nsources-2].woff = 0;
 				srcpid = -1;
 			}
+			continue;
+		} else if(sources[0].revents & POLLHUP) {
+			report(sources[0].revents,"ppoll socket hup? but it should never close!");
 			continue;
 		} else if(sources[0].revents) {
 			// something went wrong!
@@ -152,7 +164,8 @@ static void capturing_err(void) {
 		for(i=1;i<nsources;++i) {
 			if(sources[i].revents == 0) continue;
 			if(sources[i].revents != POLLIN) {
-				report(sources[i].revents,"source %d:%.*s",i,infos[i].pid.l,infos[i].pid.s);
+				report(sources[i].revents,"source %d:%.*s",
+							 i,infos[i].pid.l,infos[i].pid.s);
 				close(sources[i].fd);
 				sources[i].fd = -1;
 				sources[i].events = 0;
@@ -206,7 +219,7 @@ static void capturing_err(void) {
 }
 
 static
-void send_fd(int where, int pid, int fd) {
+int send_fd(int where, int pid, int fd) {
 	struct msghdr msg = {};
 	char buf[CMSG_SPACE(sizeof(fd))];
 	memset(buf, '\0', sizeof(buf));
@@ -228,21 +241,24 @@ void send_fd(int where, int pid, int fd) {
 
 	msg.msg_controllen = cmsg->cmsg_len;
 
-	if (sendmsg(where, &msg, 0) < 0) {
-		perror("sendmsg");
-		abort();
-	}
+	return sendmsg(where, &msg, 0);
 }
 
 static
 void capture_err(void) {
 	if(errcapture < 0) {
 		perror("can't capture yet...");
-		abort();
+		return;
 	}
 	int io[2];
 	pipe(io);
-	send_fd(errcapture, getpid(), io[0]);
+	int res = send_fd(errcapture, getpid(), io[0]);
+	if(res < 0) {
+		perror("can't send the fd...");
+		close(io[0]);
+		close(io[1]);
+		return;
+	}
 	close(io[0]);
 	dup2(io[1],2);
 	close(io[1]);
@@ -302,14 +318,29 @@ void waiter_unblock(void) {
 	sigprocmask(SIG_SETMASK,&mask.original,NULL);
 }
 
+int waiter_pause(void) {
+	int res;
+	siginfo_t info;
+	res = sigwaitinfo(&mask.onlychild,&info);
+	if(res < 0) {
+		switch(errno) {
+		case EINTR:
+			return waiter_pause();
+		default:
+			perror("waiter_pause");
+			abort();
+		}
+	}
+	return res;
+}
+
 // wait and process signals
 int waiter_wait(struct pollfd* poll,
 								int npoll,
-								const time_t timeoutsec) {
-	static struct timespec timeout = {};
-	timeout.tv_sec = timeoutsec;
+								const struct timespec* timeout) {
+
 	int res;
-	res = ppoll(poll,npoll,timeoutsec == -1 ? NULL : &timeout, &mask.nochild);
+	res = ppoll(poll,npoll,timeout, &mask.nochild);
 	if(res < 0) {
 		switch(errno) {
 		case EINTR:
@@ -325,11 +356,12 @@ int waiter_wait(struct pollfd* poll,
 // call this to drain a signalfd, and then waiter_next until it returns 0
 void waiter_drain(void) {
 	siginfo_t info;
-	const static struct timespec poll = {0,0};
+	const static struct timespec poll = {1,0};
 	for(;;) {
 		int sig = sigtimedwait(&mask.onlychild, &info, &poll);
 		if(sig < 0) {
 			if(errno == EAGAIN) return;
+			if(errno == EINTR) continue;
 			perror("drain");
 			abort();
 		}
@@ -379,13 +411,10 @@ void waiter_check(int status, bool timeout, int expected) {
 	error(WEXITSTATUS(status),0,"%d exited with %d",expected,WEXITSTATUS(status));
 }
 
-bool waiter_waitfor(time_t sec, int expected, int *status) {
+bool waiter_waitfor(const struct timespec* timeout, int expected, int *status) {
 	//assert(child_processes == 1); as long as none of them die, processes are ok
-	const struct timespec t = {
-		sec, 0
-	};
 	siginfo_t info;
-	int ret = sigtimedwait(&mask.onlychild, &info, &t);
+	int ret = sigtimedwait(&mask.onlychild, &info, timeout);
 	if(ret < 0) {
 		// timed out
 		if(errno == EAGAIN) return true;
