@@ -54,7 +54,7 @@ void report(int revents, const char* fmt, ...) {
 
 static void capturing_err(void) {
 	/* copyright trolls bullied linux into not supporting I_SENDFD
-		 so we need to use the more complicated socket based method
+	   so we need to use the more complicated socket based method
 	*/
 	int socks[2];
 	if(0 != socketpair(AF_UNIX,SOCK_SEQPACKET,0,socks)) {
@@ -128,13 +128,13 @@ static void capturing_err(void) {
 				memcpy(&srcerr, CMSG_DATA(cmsg), sizeof(srcerr));
 
 				fprintf(stderr, "INFO: got new stderr source %d from %d\n",
-								srcerr,srcpid);
+						srcerr,srcpid);
 				++nsources;
 				sources = realloc(sources,sizeof(*sources) * nsources);
 				infos = realloc(infos,sizeof(*infos) * (nsources-1));
 				sources[nsources-1].fd = srcerr;
 				fcntl(srcerr,F_SETFL,
-							fcntl(srcerr, F_GETFL) | O_NONBLOCK);
+					  fcntl(srcerr, F_GETFL) | O_NONBLOCK);
 				sources[nsources-1].events = POLLIN;
 				infos[nsources-2].pid.l = snprintf
 					(infos[nsources-2].pid.s,6,"%d",srcpid);
@@ -165,7 +165,7 @@ static void capturing_err(void) {
 			if(sources[i].revents == 0) continue;
 			if(sources[i].revents != POLLIN) {
 				report(sources[i].revents,"source %d:%.*s",
-							 i,infos[i].pid.l,infos[i].pid.s);
+					   i,infos[i].pid.l,infos[i].pid.s);
 				close(sources[i].fd);
 				sources[i].fd = -1;
 				sources[i].events = 0;
@@ -173,8 +173,8 @@ static void capturing_err(void) {
 			}
 			for(;;) {
 				ssize_t amt = read(sources[i].fd,
-													 infos[i-1].buf + infos[i-1].woff,
-													 BUFSIZE - infos[i-1].woff);
+								   infos[i-1].buf + infos[i-1].woff,
+								   BUFSIZE - infos[i-1].woff);
 				if(amt == 0) break;
 				if(amt < 0) {
 					assert(errno == EAGAIN || errno == EINTR);
@@ -189,15 +189,15 @@ static void capturing_err(void) {
 				infos[i-1].woff += amt;
 				while(infos[i-1].roff < infos[i-1].woff) {
 					char* nl = memchr(infos[i-1].buf+infos[i-1].roff,
-														'\n',
-														infos[i-1].woff - infos[i-1].roff);
+									  '\n',
+									  infos[i-1].woff - infos[i-1].roff);
 							
 					if(nl == NULL) break;
 					size_t nlamt = nl-(infos[i-1].buf + infos[i-1].roff);
-					writeit(nlamt > 60 ? 60 : nlamt);
+					writeit(nlamt > 120 ? 120 : nlamt);
 					infos[i-1].roff += nlamt + 1;
 					while(infos[i-1].roff < infos[i-1].woff &&
-								infos[i-1].buf[infos[i-1].roff] == '\n') {
+						  infos[i-1].buf[infos[i-1].roff] == '\n') {
 						++infos[i-1].roff;
 					}
 				}
@@ -206,8 +206,8 @@ static void capturing_err(void) {
 				} else if(infos[i-1].woff - infos[i-1].roff < infos[i-1].roff) {
 					// can shift without overlap
 					memcpy(infos[i-1].buf,
-								 infos[i-1].buf+infos[i-1].roff,
-								 infos[i-1].woff-infos[i-1].roff);
+						   infos[i-1].buf+infos[i-1].roff,
+						   infos[i-1].woff-infos[i-1].roff);
 					infos[i-1].woff -= infos[i-1].roff;
 					infos[i-1].roff = 0;
 				}
@@ -224,7 +224,7 @@ int send_fd(int where, int pid, int fd) {
 	char buf[CMSG_SPACE(sizeof(fd))];
 	memset(buf, '\0', sizeof(buf));
 
-  struct iovec io = { .iov_base = &pid, .iov_len = sizeof(pid) };
+	struct iovec io = { .iov_base = &pid, .iov_len = sizeof(pid) };
 
 	msg.msg_iov = &io;
 	msg.msg_iovlen = 1;
@@ -265,13 +265,13 @@ void capture_err(void) {
 }
 
 /* the original signal mask could have blocked SIGCHLD
-	 so if we pass the orginal signal mask to ppoll... it doesn't EINTR for child processes.
-	 So we need to pass the original mask to forked processes
+   so if we pass the orginal signal mask to ppoll... it doesn't EINTR for child processes.
+   So we need to pass the original mask to forked processes
 
-	 To ppoll we must pass the original mask, explicitly minus SIGCHLD.
+   To ppoll we must pass the original mask, explicitly minus SIGCHLD.
 
-	 And to sigtimedwait, we must pass a sigset_t containing only SIGCHLD, so we need three
-	 different sigset_t's.
+   And to sigtimedwait, we must pass a sigset_t containing only SIGCHLD, so we need three
+   different sigset_t's.
 */
 
 void derp() {}
@@ -295,13 +295,13 @@ void waiter_setup(void) {
 	capturing_err();
 
 	/* Since programmers are idiots, they conveniently omit this from all documentation.
-		 The default handler for SIGCHLD secretly has the SA_RESTART flag set.
-		 That means SIGCHLD won't interrupt ppoll, or pselect.
-		 That means signal blocking is *completely useless* for SIGCHLD, one of the only
-		 times it's actually very helpful.
+	   The default handler for SIGCHLD secretly has the SA_RESTART flag set.
+	   That means SIGCHLD won't interrupt ppoll, or pselect.
+	   That means signal blocking is *completely useless* for SIGCHLD, one of the only
+	   times it's actually very helpful.
 
-		 Solution: make our own stupid signal handler, then set sa_flags to 0.
-		 (doesn't work to pass SIG_DFL and set flags to 0.
+	   Solution: make our own stupid signal handler, then set sa_flags to 0.
+	   (doesn't work to pass SIG_DFL and set flags to 0.
 	*/
 	struct sigaction sa = {};
 	sa.sa_handler = derp;
@@ -336,8 +336,8 @@ int waiter_pause(void) {
 
 // wait and process signals
 int waiter_wait(struct pollfd* poll,
-								int npoll,
-								const struct timespec* timeout) {
+				int npoll,
+				const struct timespec* timeout) {
 
 	int res;
 	res = ppoll(poll,npoll,timeout, &mask.nochild);
